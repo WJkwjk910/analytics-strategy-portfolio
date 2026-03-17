@@ -6,32 +6,29 @@ Master’s candidate in Systems Engineering with a background in economics, anal
 ## Selected Projects
 
 ### [National City Bank — Customer Propensity Modeling](./national-city-bank-propensity-model)
-Built predictive models to identify customers most likely to adopt a new auto credit line using behavioral and financial data. The analysis supported targeted marketing strategy and customer acquisition prioritization.
+Developed predictive models to identify customers most likely to adopt a new auto credit line, enabling targeted marketing and improved customer acquisition efficiency.
 
 **Highlights**
-- Logistic regression and random forest models
-- Internal validation AUC ~0.90
-- External validation AUC 0.82
+- Built logistic regression and random forest models
+- Achieved internal validation AUC ~0.90 and external AUC 0.82
 - Ranked 1,000 customers and identified top 100 high-probability prospects
 
 ### [Kaiserliche Bohne — Sales Forecasting & Demand Analysis](./kaiserliche-bohne-sales-forecasting)
-Analyzed transaction data and built forecasting models to support inventory, staffing, and demand planning decisions in a retail coffee business.
+Built demand forecasting models using transaction data to support inventory planning, staffing decisions, and operational efficiency in a retail coffee business.
 
 **Highlights**
-- Time-series forecasting for key products
-- Trend and seasonality analysis
-- Operational recommendations for inventory and staffing
-- Demand-based planning insights
+- Performed time-series analysis to identify trends and seasonality
+- Developed forecasting models for key products (e.g., cappuccino)
+- Generated demand projections to support operational decision-making
 
 ### [Home Value Forecasting — Real Estate Price Analysis](./home-value-forecasting)
-Analyzed housing market data to identify price trends, growth consistency, and investment-attractive regions for real estate decision-making.
+Analyzed housing market data to identify regions with strong and consistent price growth, supporting data-driven real estate investment decisions.
 
 **Highlights**
-- Housing market trend analysis
-- Comparative market evaluation
-- Investment-oriented insights
-- Structured analytical reporting
-
+- Evaluated long-term price trends across regions
+- Compared growth consistency and volatility
+- Identified top markets for stable and high-return investment potential
+  
 ## Technical Skills
 Python, R, SQL, Excel, Predictive Modeling, Forecasting, Decision Analysis
 
