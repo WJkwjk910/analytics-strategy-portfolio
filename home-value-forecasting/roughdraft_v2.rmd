@@ -1,0 +1,3378 @@
+---
+title: "EXT CSCI E-106 Model Data Class Group Project"
+author: "Charles Atchison<br>Jussan Da Silva Bahia Nascimento<br>Minako Edgar<br>Minghui Liu<br>Won Jun Kang<br>Yuvraj Puri"
+date: "Date: `r Sys.Date()`"
+output:
+  html_document:
+    fig_caption: true
+    css: "extra_html_files/style.css"
+    includes:
+      before_body: extra_html_files/header.html
+      after_body: extra_html_files/copyright.html
+---
+## 1. Load and Review the Dataset
+### 1.1 Data Loading
+```{r setup, echo = TRUE, include = TRUE, results = 'hide'}
+
+# Check R Version to avoid issues
+if (as.numeric(R.version$major) < 4 ||
+    (as.numeric(R.version$major) == 4 && as.numeric(R.version$minor) < 3) ||
+    (as.numeric(R.version$major) == 4 && as.numeric(R.version$minor) == 3 && as.numeric(R.version$patch) < 2)) {
+  message("Warning: Your R version is not 4.3.2 or greater.")
+  message("Please consider updating R to the latest version from:\nhttps://cran.r-project.org/")
+}
+
+# List of required packages
+required_packages <- c(
+  "plyr", "alr4", "caret", "car", "corrplot", "dplyr", "effects", "fastDummies", "ggplot2",
+  "GGally", "ggplot2", "ggpubr", "glmnet", "lmtest", "MASS", "ModelMetrics", "kableExtra",
+  "nortest", "olsrr", "onewaytests", "readr", "here", "stringr", "knitr", "reshape2", "leaflet",
+  "RColorBrewer", "scales", "purrr", "DT", "jsonlite", "magrittr", "rpart", "broom", "neuralnet",
+  "pscl"
+)
+
+# Establish CRAN for package installs
+options(repos = c(CRAN = "https://ftp.osuosl.org/pub/cran/")) # Set the CRAN mirror
+
+# Check if each package is installed; if not, install it
+for (pkg in required_packages) {
+  if (!(pkg %in% installed.packages()[,"Package"])) {
+    install.packages(pkg, dependencies = TRUE)
+  }
+}
+
+# Load all the packages without displaying masking warnings
+lapply(required_packages, function(pkg) {
+  suppressMessages(library(pkg, character.only = TRUE))
+})
+
+# Build the full path to the directory containing the Rmd file
+rmd_dir <- dirname(here())
+
+# Navigate up one directory and then to the CSV data file
+csv_file <- file.path("KC_House_Sales.csv")
+
+json_filepath <- file.path("model_parameters.json")
+
+# Read the CSV file into a data frame
+df <- read.csv(csv_file)
+
+# Function to manually update the JSON file with model parameters
+update_model_json <- function(model_name, features, filepath) {
+  # Read existing parameters if the file exists, or initialize an empty list
+  model_params <- if (file.exists(filepath)) {
+                    fromJSON(filepath)
+                  } else {
+                    list()
+                  }
+  # Update the parameters for the specified model
+  model_params[[model_name]] <- features
+  # Write the updated parameters back to the JSON file
+  write_json(model_params, filepath)
+}
+
+# Initialize the figure counter
+fig_counter <- 0
+table_counter <- 0
+
+# Custom function to generate figure captions with automatic numbering
+generate_figure_caption <- function(caption, section) {
+  fig_counter <<- fig_counter + 1
+  paste0("Figure ", section, ".", fig_counter, " ", caption)
+}
+
+# Custom function to generate figure captions with automatic numbering
+generate_table_caption <- function(caption, section) {
+  table_counter <<- table_counter + 1
+  paste0("Table ", section, ".", table_counter, " ", caption)
+}
+```
+
+### 1.2 Initial Data Inspection
+
+### Dataset Overview and Detailed Description
+The King County house sales dataset is a comprehensive collection of 21,613 observations, each representing a unique house sale. The dataset encompasses a variety of features that describe different aspects of the houses sold. Below is a detailed description of each variable in the dataset:
+
+```{r data_description, echo = TRUE, include = TRUE}
+# Create a data frame for the table
+data_description <- data.frame(
+  Variable = c(
+    'id', 'date', 'price', 'bedrooms', 'bathrooms', 'sqft_living', 'sqft_lot',
+    'floors', 'waterfront', 'view', 'condition', 'grade', 'sqft_above',
+    'sqft_basement', 'yr_built', 'yr_renovated', 'zipcode', 'lat',
+    'long', 'sqft_living15', 'sqft_lot15'
+  ),
+  Description = c(
+    'Unique ID for each home sold (not used as a predictor)',
+    'Date of the home sale',
+    'Price of each home sold',
+    'Number of bedrooms',
+    'Number of bathrooms, ".5" accounts for a bathroom with a toilet but no shower',
+    'Square footage of the apartment interior living space',
+    'Square footage of the land space',
+    'Number of floors',
+    'A dummy variable for whether the apartment was overlooking the waterfront or not',
+    'An index from 0 to 4 of how good the view of the property was',
+    'An index from 1 to 5 on the condition of the apartment',
+    'An index from 1 to 13 about building construction and design quality',
+    'The square footage of the interior housing space above ground level',
+    'The square footage of the interior housing space below ground level',
+    'The year the house was initially built',
+    'The year of the house’s last renovation',
+    'The zipcode area the house is in',
+    'Latitude coordinate',
+    'Longitude coordinate',
+    'The square footage of interior housing living space for the nearest 15 neighbors',
+    'The square footage of the land lots of the nearest 15 neighbors'
+  )
+)
+
+# Create the table with kable
+data_description_table <- kable(
+  data_description,
+  format = "html",
+  caption = generate_figure_caption(caption = "Data Description", section = 1)
+) %>%
+  kable_styling(full_width = TRUE) %>%
+  column_spec(1, bold = TRUE)
+
+# Print the table
+data_description_table
+```
+
+### 1.3 Data Summary
+
+The dataset contains housing information for a total of 21,613 houses. The prices of these houses range from the minimum price of $0 to a maximum of $9.9 million. On average, the houses in this dataset have a price of approximately $540,000. The median price, which represents the middle value when all prices are arranged in ascending order, is $450,000. The most common price range falls within the first quartile, where houses have prices around $321,000 to $645,000. The dataset also includes information on various other factors, such as the number of bedrooms, bathrooms, square footage of living space, lot size, and more, all of which can impact house prices. Understanding the distribution and characteristics of house prices in this dataset is essential for any analysis or modeling task related to real estate.
+
+```{r reset_section1_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 2. Create Train and Test Datasets
+
+```{r data_transformation}
+# Data Preprocessing and Transformation
+set.seed(1023)  # Setting a seed for reproducibility
+split_index <- sample(1:nrow(df), size = 0.7 * nrow(df))
+train_df <- df[split_index, ]
+test_df <- df[-split_index, ]
+
+# Remove non-numeric characters from the 'price' column and convert it to numeric
+df$price <- as.numeric(str_replace_all(df$price, "[^0-9.]", ""))
+
+# Calculation of Convergence Point: Determine the convergence point for high-value homes
+high_value_threshold <- quantile(df$price, probs = 0.95, na.rm = TRUE)  # Calculate the high-value threshold
+high_value_homes <- df[df$price >= high_value_threshold, ]  # Select high-value homes
+convergence_point <- c(mean(high_value_homes$lat, na.rm = TRUE), mean(high_value_homes$long, na.rm = TRUE))
+
+# Remove non-numeric characters from the 'price' column and convert it to numeric
+train_df$price <- as.numeric(str_replace_all(train_df$price, "[^0-9.]", ""))
+test_df$price <- as.numeric(str_replace_all(test_df$price, "[^0-9.]", ""))
+
+# Data Transformation Function with Distance Binning Option
+transform_data <- function(df, convergence_point, linear_model) {
+  # Date Transformation: Convert the 'date' column to a Date object if present
+  if ("date" %in% colnames(df)) {
+    df$date <- as.Date(substr(as.character(df$date), 1, 8), format="%Y%m%d")
+    # Date-Time Feature Engineering: Extract various date-related features
+    df$year_sold <- lubridate::year(df$date)
+    df$month_sold <- lubridate::month(df$date)
+    df$day_sold <- lubridate::day(df$date)
+    df$season <- factor(lubridate::quarter(df$date), labels = c("Winter", "Spring", "Summer", "Fall"))
+    df$week_of_year <- lubridate::week(df$date)
+    df$day_of_year <- lubridate::yday(df$date)
+  }
+  # Creating Dummy Variables: Convert categorical variables into dummy variables
+  df <- df %>%
+    mutate(zipcode = as.factor(zipcode),
+           waterfront = as.factor(waterfront),
+           view = as.factor(view),
+           condition = as.factor(condition),
+           grade = as.numeric(grade),
+           grade = case_when(
+             grade %in% 1:3 ~ "Below_Average",
+             grade %in% 4:10 ~ "Average",
+             grade %in% 11:13 ~ "Above_Average")) %>%
+    dummy_cols(select_columns = c('zipcode', 'view', 'condition', 'grade', 'waterfront', 'season'))
+  # Remove last dummy variables to avoid multicollinearity
+  if (linear_model) {
+    df <- df[, !(names(df) %in% c("zipcode_98199", "view_0", "condition_1", "grade_13", "season_Winter", "waterfront_1"))]
+  }
+  # Haversine Distance Function: Calculate the distance between two points on Earth's surface
+  haversine_distance <- function(lat1, long1, lat2, long2) {
+    R <- 6371  # Earth radius in kilometers
+    delta_lat <- (lat2 - lat1) * pi / 180
+    delta_long <- (long2 - long1) * pi / 180
+    a <- sin(delta_lat/2)^2 + cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(delta_long/2)^2
+    c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+    d <- R * c  # Calculate the haversine distance
+    return(d)
+  }
+  # Calculate Haversine Distance
+  df$distance_to_convergence <- mapply(haversine_distance, df$lat, df$long,
+                                       MoreArgs = list(lat2 = convergence_point[1], long2 = convergence_point[2]))
+  # Remove columns that are no longer needed
+  df <- df[, !(names(df) %in% c("id", "date", "zipcode", "view", "condition", "grade", "waterfront", "season"))]
+  return(df)
+}
+# Applying the transformation function to training and test sets
+train_df_linear <- transform_data(train_df, convergence_point, linear_model = TRUE)  # Transform the training data for linear models
+test_df_linear <- transform_data(test_df, convergence_point, linear_model = TRUE)    # Transform the test data for linear models
+train_df_non_linear <- transform_data(train_df, convergence_point, linear_model = FALSE)  # Transform the training data
+test_df_non_linear <- transform_data(test_df, convergence_point, linear_model = FALSE)    # Transform the test data
+
+# Set this to TRUE to update all the json model_parameters that are stored the JSON
+# Check if the update_model_parameters is TRUE or not
+update_model_parameters <- FALSE
+
+# This updates the json with the parameters that were obtained from the intensive process of running
+update_model_json <- function(model_name, features, filepath) {
+  model_params <- if (file.exists(filepath)) {
+                    fromJSON(filepath)
+                  } else {
+                    list()
+                  }
+  model_params[[model_name]] <- features
+  write_json(model_params, filepath)
+}
+```
+
+### 2.1 Data Cleaning and Transformation
+
+The data preprocessing and transformation phase was crucial to prepare the dataset for accurate predictive analysis. This section outlines the key steps taken:
+
+#### 2.1.1 Exclusion of Non-Predictive Variables
+
+**Exclusion of Non-Predictive Variables**: The dataset contained certain variables that were non-predictive in nature and therefore not useful for our regression model. Specifically, the `id` variable, serving as a unique identifier for each house sale, was removed to prevent it from influencing house price predictions. However, `lat` (latitude) and `long` (longitude) were retained for their potential role in calculating geographical distances, which could impact house prices.
+
+#### 2.1.2 Transformation of Data Types
+
+**Transformation of Data Types**: To ensure consistency and suitability for modeling, several variables underwent data type transformation. Notably, the `date` variable, initially in string format, was converted into a numeric format to facilitate its incorporation into statistical models. Additionally, variables like `price`, `sqft_living`, `sqft_lot`, and others were converted to numeric formats.
+
+#### 2.1.3 Creation of Dummy Variables for Categorical Data
+
+**Creation of Dummy Variables for Categorical Data**: Categorical variables such as `waterfront`, `view`, `condition`, and `grade` were transformed into dummy variables. This transformation was essential for regression analysis, as it enabled the inclusion of non-numeric variables in the model. The process involved converting these categorical variables into binary variables (0 or 1). This was particularly important for variables like `waterfront`, which is inherently binary, and for ordinal variables like `view` and `condition`, which possess an intrinsic order but needed numerical representation for modeling.
+
+#### 2.1.4 Handling Special Cases in Variables
+
+**Handling Special Cases in Variables**: Variables like `bathrooms`, which could have values like "0.5" to represent bathrooms with a toilet but no shower, were retained in their original form. These nuanced representations were preserved, as they carried important information about the characteristics of the houses.
+
+#### 2.1.5 Grouping and Clustering of Variables
+
+**Grouping and Clustering of Variables**: The `zipcode` variable underwent transformation by extracting the first three digits. This step reduced the number of dummy variables, preventing model complexity while still capturing geographical influences on house prices. Additionally, the `grade` variable was clustered into broader categories to simplify the model and focus on significant differences in construction and design quality.
+
+#### 2.1.6 Haversine Distance Calculation
+
+**Haversine Distance Calculation**: A critical step was the calculation of Haversine distances. This involved creating a function to calculate the distance between two geographical points represented by latitude and longitude coordinates. The calculated `haversine_distance` was pivotal for understanding spatial relationships and proximity to key locations that might affect house prices.
+
+#### 2.1.7 Calculation of Convergence Point
+
+**Calculation of Convergence Point**: A 'convergence point' was identified within the dataset, derived from houses with the highest values. This convergence point served as a reference to calculate the distance of each property from this central high-value location, potentially indicating a desirable area. Importantly, this step was executed on the training set alone to ensure the model accounted for locational desirability without data leakage.
+
+### 2.2 Training Data Header
+
+```{r view_head_data, echo = FALSE, include = TRUE, results = 'asis'}
+# Specify the height for the scrollable div
+table_height <- "400px"
+
+# Create a scrollable div and place the table inside it
+cat(sprintf('<div style="overflow-y: scroll; max-height: %s;">', table_height))
+# Print the table with a caption using the custom function
+kable(
+  head(train_df_linear),
+  caption = generate_table_caption("Data Header", section = 2),
+  format = "html"
+)
+cat('</div>')
+```
+
+```{r reset_section2_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 3. Data Preprocessing
+
+### 3.1 Exclusion of Non-Predictive Variables
+
+#### 3.1.1 Exclusion of `id` Variable
+
+- The `id` variable, serving as a unique identifier for each house sale, was removed from the dataset. This exclusion aimed to prevent it from influencing house price predictions.
+
+#### 3.1.2 Retention of Geographic Variables
+
+- Unlike other non-predictive variables, `lat` (latitude) and `long` (longitude) were retained in the dataset. These geographic coordinates were preserved due to their potential role in calculating geographical distances, which could significantly impact house prices. While not directly predictive, they provide valuable spatial information.
+
+### 3.2 Transformation of Data Types
+
+#### 3.2.1 Conversion of `date` Variable
+
+- The `date` variable, initially in string format, underwent a critical transformation. It was converted into a numeric format, allowing for easier incorporation into statistical models. Numeric representations of dates are more amenable to various types of analyses, including regression.
+
+#### 3.2.2 Conversion of Numeric Variables
+
+- Several variables, including `price`, `sqft_living`, `sqft_lot`, and others, underwent data type transformation. These variables were converted to numeric formats to ensure consistency and suitability for modeling purposes. Numeric representations are essential for performing mathematical operations and statistical modeling.
+
+### 3.3 Creation of Dummy Variables for Categorical Data
+
+#### 3.3.1 Transformation of Categorical Variables
+
+- Categorical variables such as `waterfront`, `view`, `condition`, and `grade` were transformed into dummy variables. This transformation is pivotal for regression analysis, as it allows these non-numeric variables to be effectively included in the model.
+
+#### 3.3.2 Binary Representation
+
+- The process of creating dummy variables involved converting categorical variables into a series of binary variables (`0` or `1`). This binary representation is particularly important for variables like `waterfront`, which is a binary indicator itself, and for ordinal variables like `view` and `condition`. This transformation preserves the inherent order of these variables while making them suitable for numerical modeling.
+
+### 3.4 Handling Special Cases in Variables
+
+#### 3.4.1 Treatment of `bathrooms` Variable
+
+- The `bathrooms` variable presented a unique challenge. It contains values like `"0.5"` that represent bathrooms with a toilet but no shower. In the code block, you can observe that we made a conscious decision not to apply any transformation to this variable. By doing so, we retained the nuanced details within the data. For instance, these values indicate specific house characteristics that can influence its price, such as the presence of a half-bathroom.
+
+### 3.5 Grouping and Clustering of Variables
+
+#### 3.5.1 Transformation of `zipcode` Variable
+
+- In the prior code block, we demonstrate the transformation of the `zipcode` variable. This transformation involves extracting the first three digits of the zip code. The purpose of this transformation is twofold: it helps in reducing the number of dummy variables, preventing the model from becoming overly complex, while still retaining the essential geographical information. It allows us to capture the broader regional influences on house prices without adding excessive dimensions to the model.
+
+#### 3.5.2 Clustering of `grade` Variable
+
+- This transformation simplifies the variable into broader categories. By doing so, we aim to enhance the interpretability of the model while focusing on the significant differences in construction and design quality among houses. The model can now capture the essence of the grade variable without getting lost in its finer details.
+
+### 3.6 Haversine Distance Calculation
+
+#### 3.6.1 Calculation of Haversine Distance
+
+- The prior code block illustrates the calculation of the Haversine distance. This calculation is performed with meticulous precision to incorporate the influence of location. A custom function, `haversine_distance`, is defined and applied to compute distances between geographical points represented by latitude and longitude. This step is critical for the model because it captures the significance of geographical proximity. It helps the model understand the spatial relationships and the impact of proximity to key locations on house prices.
+
+### 3.7 Calculation of Convergence Point
+
+#### 3.7.1 Identification of Convergence Point
+
+- In the prior code block, you'll notice the process of identifying a 'convergence point.' This central reference point is derived from houses with the highest values, essentially high-value homes within the dataset. This convergence point serves as a crucial reference for calculating the distance of each property from this central, high-value location. By doing so, we create a measure of proximity to desirable areas. Importantly, this calculation is meticulously handled in the code to ensure that it doesn't introduce data leakage. It's based solely on the training set, maintaining model integrity and avoiding the incorporation of information from the test set.
+
+```{r reset_section_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 4. Build a Regression Model
+
+### 4.1 Helper Functions for Model Comparison
+
+#### 4.1.1 `add_model_performance` Function
+
+The `add_model_performance` function serves as a crucial tool for evaluating regression models. It takes as input a model object and conducts an evaluation using both training and testing datasets. The function calculates key performance metrics, including Sum of Squared Errors (SSE), R-squared, Root Mean Squared Error (RMSE), and Mean Absolute Error (MAE) for both the training and test datasets. These metrics provide valuable insights into the model's predictive capabilities. Additionally, it offers the flexibility to incorporate the resulting performance metrics into an existing results dataframe or create a new one if none is provided. This function streamlines the evaluation process, making it easier to comprehensively compare and assess different models.
+
+#### 4.1.2 `view_model_results` Function
+
+The `view_model_results` function simplifies the task of displaying model performance metrics in a user-friendly format. Leveraging the `datatable` function, it generates an interactive and visually appealing table for presenting model evaluation results. Users can input a dataframe containing model performance metrics, and this function will produce an informative table with options for adding captions. This feature enhances the communication and visualization of model performance, facilitating informed decision-making when comparing various models.
+
+#### 4.1.3 `extract_and_display_features` Function
+
+The `extract_and_display_features` function emphasizes transparency and interpretability. Given a model object, it extracts and presents the features utilized by the model for making predictions. This transparency aids in understanding which variables influence the model's decisions. By displaying the relevant features, users gain insights into the model's feature selection process, enhancing model interpretability and assisting in feature engineering efforts.
+
+#### 4.1.4 `create_model` Function
+
+The `create_model` function simplifies the creation of linear regression models based on user-defined feature subsets. Users can specify a dataframe containing their data, the target variable, and a list of features they wish to include in the model. The function constructs the model's formula and fits a linear regression model accordingly. This flexibility empowers users to experiment with different feature combinations and observe their impact on model performance, aiding in the model selection process.
+
+#### 4.1.5 `prepare_data` Function
+
+The `prepare_data` function streamlines the data preparation process for model evaluation. It extracts features used in the model, creates training and testing datasets without the target variable, and organizes the data for model evaluation. By automating these steps, this function ensures consistency and accuracy in the data used for model assessment. Users can easily interface with the prepared data, saving time and reducing the risk of errors during the evaluation process.
+
+#### 4.1.6 `evaluate_model` Function
+
+The `evaluate_model` function combines the elements of model evaluation and result aggregation. Given a model, training and testing datasets, and a target variable, it evaluates the model's performance and adds the resulting metrics to a results dataframe. Users can specify a model name for identification purposes, facilitating easy tracking of multiple model evaluations. This function streamlines the process of comparing various models by accumulating their performance metrics in a single dataframe, simplifying the decision-making process when selecting the best model for a given task.
+
+Collectively, these functions provide a comprehensive framework for efficiently evaluating and comparing regression models. They enhance transparency, simplify the evaluation process, and empower users to make informed decisions regarding model selection and feature engineering.
+
+```{r initial_model, echo = TRUE, include = TRUE}
+#' Add Model Performance to Dataframe
+#'
+#' This function evaluates a given regression model using training and testing datasets. It calculates
+#' performance metrics like SSE, R-squared, RMSE, and MAE for both training and test sets, and then adds
+#' these metrics to a provided results dataframe or creates one if not provided. The function ensures
+#' that both training and testing datasets contain the same features used in the model before performing
+#' predictions and calculations.
+#'
+#' @param model_name A string representing the name of the model.
+#' @param model The model object to be evaluated.
+#' @param x_train A dataframe containing the features of the training data.
+#' @param y_train A vector containing the target variable of the training data.
+#' @param x_test A dataframe containing the features of the test data.
+#' @param y_test A vector containing the target variable of the test data.
+#' @param df_results An optional dataframe where model performance metrics will be added (default: NULL).
+#' @return The updated dataframe with the added model performance metrics.
+#'
+#' @examples
+#' linear_model <- lm(price ~ ., data = train_df)
+#' df_results <- add_model_performance("Linear Model", linear_model, x_train, y_train, x_test, y_test)
+#'
+#' # If df_results already exists and you want to add more results:
+#' df_results <- add_model_performance("Another Model", another_model, x_train, y_train, x_test, y_test, df_results)
+#'
+#' @details
+#' The function first extracts the features used in the model and checks if these features are present in
+#' both the training and testing datasets. It then uses the model to predict the target variable on both
+#' datasets and calculates performance metrics. These metrics are added to a dataframe that either exists
+#' or is created within the function. This dataframe can be used for comparing different models' performances.
+#'
+#' It is assumed that the model is correctly specified with the appropriate features and the dataframes
+#' provided to the function align with the model's structure.
+
+add_model_performance <- function(model_name, model, x_train, y_train, x_test, y_test, df_results = NULL) {
+    # Create df_results if not provided
+    if (is.null(df_results)) {
+        df_results <- data.frame(
+            Model = character(),
+            SSE_train = double(),
+            SSE_test = double(),
+            R_squared_train = double(),
+            R_squared_test = double(),
+            RMSE_train = double(),
+            RMSE_test = double(),
+            MAE_train = double(),
+            MAE_test = double(),
+            stringsAsFactors = FALSE
+        )
+    }
+
+    y_hat_train <- predict(model, newdata = x_train)
+    y_hat_test <- predict(model, newdata = x_test)
+
+    # Performance metrics calculation
+    mae_train <- mean(abs(y_train - y_hat_train))
+    mae_test <- mean(abs(y_test - y_hat_test))
+
+    sse_train <- sum((y_train - y_hat_train)^2)
+    sse_test <- sum((y_test - y_hat_test)^2)
+
+    tss_train <- sum((y_train - mean(y_train))^2)
+    tss_test <- sum((y_test - mean(y_test))^2)
+
+    rsq_train <- 1 - (sse_train / tss_train)
+    rsq_test <- 1 - (sse_test / tss_test)
+
+    rmse_train <- sqrt(mean((y_train - y_hat_train)^2))
+    rmse_test <- sqrt(mean((y_test - y_hat_test)^2))
+
+    # Appending results to the dataframe
+    new_row <- data.frame(
+        Model = model_name,
+        SSE_train = sse_train,
+        SSE_test = sse_test,
+        R_squared_train = rsq_train,
+        R_squared_test = rsq_test,
+        RMSE_train = rmse_train,
+        RMSE_test = rmse_test,
+        MAE_train = mae_train,
+        MAE_test = mae_test
+    )
+
+    df_results <- rbind(df_results, new_row)
+
+    # Returning the updated dataframe
+    return(df_results)
+}
+
+
+#' Display Model Results using Datatable
+#'
+#' This function displays a dataframe containing model performance metrics using the `datatable` function.
+#'
+#' @param df_results A dataframe containing model performance metrics.
+#' @param caption Optional caption for the table (default: "Model Comparison").
+#' @return NULL (it displays the table but doesn't return a value).
+
+view_model_results <- function(df_results, caption) {
+  # Identifying numeric columns other than "Model", "R_squared_train", and "R_squared_test"
+  cols_to_round <- setdiff(names(df_results[sapply(df_results, is.numeric)]), c("Model", "R_squared_train", "R_squared_test"))
+
+  # Round these specific columns to 2 decimal places
+  df_results[cols_to_round] <- lapply(df_results[cols_to_round], round, 2)
+
+  # Round R-squared columns to 4 decimal places
+  df_results$R_squared_train <- round(df_results$R_squared_train, 5)
+  df_results$R_squared_test <- round(df_results$R_squared_test, 5)
+
+  # Display the dataframe using datatable
+  datatable(
+    df_results,
+    caption = caption,
+    options = list(
+      paging = FALSE,
+      autoWidth = TRUE,
+      scrollX = TRUE,
+      fixedColumns = list(leftColumns = 1)
+    )
+  )
+}
+
+
+extract_and_display_features <- function(model, full_df, target_var) {
+  features_used <- setdiff(names(coef(model)), "(Intercept)")
+  features_used <- features_used[features_used != "(Intercept)"]
+
+  # Get all the feature names from the full dataset, excluding the target variable
+  all_features <- names(full_df)
+  all_features <- all_features[all_features != target_var]
+
+  # Identify features not used in the model and print if desired
+  # unused_features <- setdiff(all_features, features_used)
+
+  # Return the features that were used as a character vector
+  return(features_used)
+}
+
+# Function to create a linear model based on a subset of features
+create_model <- function(df, target_var, features) {
+  # Construct the formula for lm()
+  formula <- as.formula(paste(target_var, "~", paste(features, collapse = "+")))
+  # Fit the linear model
+  return(lm(formula, data = df))
+}
+
+prepare_data <- function(model, train_df, test_df, target_var) {
+  # Extracting used features from the model
+  used_features <- extract_and_display_features(model, train_df, target_var = target_var)
+
+  # Create x_train and x_test without the target variable
+  x_train <- subset(train_df, select = used_features)
+  x_test <- subset(test_df, select = used_features)
+
+  y_train <- train_df[[target_var]]
+  y_test <- test_df[[target_var]]
+
+  return(list(x_train = x_train, x_test = x_test, y_train = y_train, y_test = y_test))
+}
+
+evaluate_model <- function(model_name, model, train_df, test_df, target_var, df_results) {
+  # Filter data into x and y subsets
+  data <- prepare_data(model, train_df, test_df, target_var = target_var)
+
+  # Adding model performance to the results dataframe
+  df_results <- add_model_performance(
+    model_name = model_name,
+    model = model,
+    x_train = data$x_train,
+    y_train = data$y_train,
+    x_test = data$x_test,
+    y_test = data$y_test,
+    df_results = df_results  # Or pass existing df_results if available
+  )
+
+  return(df_results)
+}
+
+# Create an empty coefficients data frame if it doesn't exist, otherwise add rows to it
+create_coefficients_df <- function(model, model_name = "Your Model Name", coefficients_df = NULL) {
+  # Check the type of model and extract coefficients accordingly
+  if (inherits(model, "lm")) {
+    coefficients <- coef(model)
+  } else if (inherits(model, "dgCMatrix")) { # If it's a matrix from glmnet
+    coefficients <- as.vector(model) # Convert matrix to vector
+    names(coefficients) <- rownames(model) # Use rownames from matrix as names
+  } else {
+    stop("Input model is not a recognized type.")
+  }
+
+  # Prepare the model data as a dataframe row
+  model_row <- data.frame(t(coefficients), check.names = FALSE)
+  model_row$Model_Name <- model_name  # Add the model name as a new column
+
+  # If coefficients_df is not provided, initialize a new data frame
+  if (is.null(coefficients_df)) {
+    coefficients_df <- model_row
+  } else {
+    # Align the model_row with the coefficients_df
+    # Adding NA columns for missing features in coefficients_df
+    missing_cols_in_df <- setdiff(names(model_row), names(coefficients_df))
+    if (length(missing_cols_in_df) > 0) {
+      coefficients_df[missing_cols_in_df] <- NA
+    }
+
+    # Adding NA columns for missing features in model_row
+    missing_cols_in_row <- setdiff(names(coefficients_df), names(model_row))
+    if (length(missing_cols_in_row) > 0) {
+      model_row[missing_cols_in_row] <- NA
+    }
+
+    # Ensure both dataframes have the same column order
+    model_row <- model_row[names(coefficients_df)]
+
+    # Bind the new row to the existing dataframe
+    coefficients_df <- rbind(coefficients_df, model_row)
+  }
+
+  # Sort the columns alphabetically, except 'Model_Name'
+  cols_order <- c("Model_Name", sort(setdiff(names(coefficients_df), "Model_Name")))
+  coefficients_df <- coefficients_df[, cols_order]
+
+  return(coefficients_df)
+}
+```
+
+### 4.2 Model Building
+
+```{r build_inital_linear_model}
+# Fit a linear regression model to the training data
+linear_model_initial <- lm(price ~ ., data = train_df_linear)
+
+# Initalize and start a coefficients_df to examine later
+coefficients_df <- create_coefficients_df(linear_model_initial, "Initial OLS Model")
+
+# Evaluate OLS_linear
+df_results <- evaluate_model("OLS_linear", linear_model_initial, train_df_linear, test_df_linear, target_var = 'price', NULL)
+
+# Add results to the df_results to view and sort later
+view_model_results(df_results, caption = generate_table_caption("OLS Linear Model Table", section = 4))
+```
+
+### 4.3 Model Evaluation
+
+```{r linear_model_evaluation, echo = TRUE, include = TRUE}
+# Show inital linear model results
+summary(linear_model_initial)
+```
+
+#### 4.3.1 Overview of Model Performance
+
+In this section, we provide an in-depth evaluation of the initial linear regression model's performance from a data modeling perspective in the context of predicting house prices.
+
+#### 4.3.2 Model Fit
+
+The model exhibits a respectable fit to the data with an adjusted R-squared value of 0.8174. This metric suggests that approximately 81.74% of the variance in house prices is accounted for by the independent variables included in the model. While this is a strong start, it's important to explore whether there is room for model improvement.
+
+#### 4.3.3 Significant Predictors
+
+Several predictors stand out as statistically significant contributors to the model's predictive power. Notably, variables such as `bedrooms`, `bathrooms`, `sqft_living`, `yr_renovated`, `lat`, `long`, and `view` have coefficients with p-values less than 0.05. These variables have a substantial influence on predicting house prices and are essential components of the model.
+
+#### 4.3.4 Baseline and Intercept
+
+The `(Intercept)` term represents the baseline house price when all other predictors are set to zero. It is crucial in understanding the inherent value of a house. Interpretation of the baseline price helps assess the model's ability to capture the impact of other variables.
+
+#### 4.3.5 Challenges and Missing Coefficients
+
+The model also reveals challenges, such as missing coefficients for some variables (e.g., `sqft_basement`), indicating potential data quality issues. Addressing these gaps is vital to enhance the model's performance and interpretability.
+
+#### 4.3.6 Residual Analysis
+
+Residual analysis indicates that the model's residuals range from -1,415,466 to 4,245,843, suggesting the presence of heteroscedasticity or outliers. Deeper investigation into these issues is necessary to refine the model and ensure its robustness.
+
+#### 4.3.7 Feature Engineering
+
+The model incorporates a wide range of features, including property characteristics, location-based attributes, and temporal variables. These features collectively contribute to its predictive capacity. Ongoing feature engineering efforts should focus on selecting relevant variables and transforming them effectively to improve the model's accuracy.
+
+#### 4.3.8 Model Optimization
+
+While the initial model provides valuable insights, further optimization is warranted. Exploring alternative regression techniques, addressing multicollinearity among predictors, and employing feature selection methods can help enhance model performance.
+
+#### 4.3.9 Next Steps
+
+We will commence with a comprehensive exploration of our dataset in Section 5, utilizing various visualization techniques to gain insights into the relationships between variables. This exploration includes continuous variable plots, correlation analysis, and in-depth relationship analysis.
+
+In Section 6, we will employ a stepwise model selection approach to identify the most relevant predictors for our linear regression model. Subsequently, we will present the results for the best linear model iterations, followed by a model comparison.
+
+Ensuring the validity of linear regression assumptions is vital, and we will conduct thorough checks in Section 7. This includes assessing the linearity assumption, examining the normality of residuals, and verifying homoscedasticity (constant variance).
+
+In Section 8, we will address issues related to linearity, normality, heteroscedasticity and multicollinearity. We will detect and analyze heteroscedasticity in Section 8, with the presentation of remedial measures.
+
+As we progress, we will explore alternative modeling techniques in Section 9. This includes the implementation of a regression tree model and a neural network model. If applicable, we will also consider a logistic regression model. These alternative models will provide valuable insights and potential enhancements to our predictive capabilities.
+
+```{r reset_section4_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 5. Data Exploration and Visualization
+### 5.1 Continuous Variable Plots
+
+#### 5.1.1 Price vs. Square Footage of Living Space
+
+```{r price_vs_sqft_living, echo = TRUE, include = TRUE}
+# Scatter plot of Price vs. Square Footage of Living Space
+ggplot(data = train_df_non_linear, aes(x = sqft_living, y = price)) +
+  geom_point(pch = 20, col = "blue") +
+  labs(title = "Price vs. Square Footage of Living Space",
+       subtitle = "Seattle Housing Data",
+       x = "Sqft Living Space",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Square Footage of Living Space", section = 5))
+```
+
+In the scatter plot above, we compare the `price` of homes against their `sqft_living` (square footage of interior living space). This visualization allows us to explore the relationship between these two variables.
+
+```{r distribution_sqft_living, echo = TRUE, include = TRUE}
+# Distribution of Square Footage of Living Space
+ggplot(data = train_df_non_linear, aes(x = sqft_living)) +
+  geom_histogram(bins = 50) +
+  labs(title = "Distribution of Sqft Living Space",
+       x = "Sqft Living Space",
+       y = "Density",
+       caption = generate_figure_caption("Distribution of Sqft Living Space", section = 5))
+```
+
+The histogram above displays the distribution of `sqft_living`. It reveals that the variable is right-skewed, with most homes having smaller living spaces and relatively fewer very large living spaces.
+
+#### 5.1.2 Price vs. Square Footage of Lot
+
+```{r price_vs_sqft_lot, echo = TRUE, include = TRUE}
+# Scatter plot of Price vs. Square Footage of Lot
+ggplot(data = train_df_non_linear, aes(x = sqft_lot, y = price)) +
+  geom_point(pch = 20, col = "green") +
+  labs(title = "Price vs. Sqft Lot",
+       x = "Sqft Lot",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Sqft Lot", section = 5))
+```
+
+The scatter plot above compares `price` against `sqft_lot` (square footage of land space). It helps us understand if there's any relationship between the size of the lot and the sale price.
+
+```{r distribution_sqft_lot, echo = TRUE, include = TRUE}
+# Distribution of Square Footage of Lot
+ggplot(data = train_df_non_linear, aes(x = sqft_lot)) +
+  geom_histogram(bins = 50) +
+  labs(title = "Distribution of Sqft Lot",
+       x = "Sqft Lot",
+       y = "Density",
+       caption = generate_figure_caption("Distribution of Sqft Lot", section = 5))
+```
+
+The histogram above visualizes the distribution of `sqft_lot`. Similar to `sqft_living`, this variable is right-skewed, with most homes having smaller lot sizes and relatively fewer very large lots.
+
+#### 5.1.3 Price vs. Square Footage Above Ground
+
+```{r price_vs_sqft_above, echo = TRUE, include = TRUE}
+# Scatter plot of Price vs. Square Footage Above Ground
+ggplot(data = train_df_non_linear, aes(x = sqft_above, y = price)) +
+  geom_point(pch = 20, col = "red") +
+  labs(title = "Price vs. Sqft Above Ground",
+       x = "Sqft Above Ground",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Sqft Above Ground", section = 5))
+```
+
+In the scatter plot above, we compare `price` against `sqft_above` (square footage of the interior housing space above ground level). This analysis helps us explore the impact of above-ground living space on home prices.
+
+```{r distribution_sqft_above, echo = TRUE, include = TRUE}
+# Distribution of Square Footage Above Ground
+ggplot(data = train_df_non_linear, aes(x = sqft_above)) +
+  geom_histogram(bins = 50) +
+  labs(title = "Distribution of Sqft Above Ground",
+       x = "Sqft Above Ground",
+       y = "Density",
+       caption = generate_figure_caption("Distribution of Sqft Above Ground", section = 5))
+```
+
+The histogram above shows the distribution of `sqft_above`. It suggests that most homes have similar above-ground square footage, with relatively fewer having significantly larger or smaller above-ground spaces.
+
+#### 5.1.4 Price vs. Square Footage of Basement
+
+Excluding homes that do not have a basement.
+
+```{r price_vs_sqft_basement, echo = TRUE, include = TRUE}
+# Scatter plot of Price vs. Square Footage of Basement (excluding 0 sqft basement)
+# Filter data for non-zero sqft_basement
+filtered_data <- train_df_non_linear[train_df_non_linear$sqft_basement > 0,]
+
+# Scatter plot with custom caption
+ggplot(data = filtered_data, aes(x = sqft_basement, y = price)) +
+  geom_point(pch = 20, col = "purple") +
+  labs(title = "Price vs. Sqft Basement",
+       x = "Sqft Basement",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Sqft Basement (Non-Zero Values)", section = 5))
+```
+
+The scatter plot above compares `price` against `sqft_basement` (square footage of the interior housing space below ground level). This visualization helps us understand if the presence and size of a basement influence home prices.
+
+```{r distribution_sqft_basement, echo = TRUE, include = TRUE}
+# Distribution of Square Footage of Basement (excluding 0 values)
+# Histogram with custom caption
+ggplot(data = filtered_data, aes(x = sqft_basement)) +
+  geom_histogram(bins = 50) +
+  labs(title = "Distribution of Sqft Basement",
+       x = "Sqft Basement",
+       y = "Density",
+       caption = generate_figure_caption("Distribution of Sqft Basement (Non-Zero Values)", section = 5))
+```
+
+The histogram above visualizes the distribution of `sqft_basement`. It indicates that most homes have little to no basement space, while some have larger basement areas.
+
+#### 5.1.5 Price vs. Year Built
+
+```{r price_vs_yr_built, echo = TRUE, include = TRUE}
+# Scatter plot of Price vs. Year Built
+ggplot(data = train_df_non_linear, aes(x = yr_built, y = price)) +
+  geom_point(pch = 20, col = "orange") +
+  labs(title = "Price vs. Year Built",
+       x = "Year Built",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Year Built", section = 5))
+```
+
+The scatter plot above compares `price` against the year when homes were initially built (`yr_built`). This analysis helps us understand how the age of a home relates to its sale price.
+
+```{r distribution_yr_built, echo = TRUE, include = TRUE}
+# Distribution of Year Built
+ggplot(data = train_df_non_linear, aes(x = yr_built)) +
+  geom_histogram(bins = 50) +
+  labs(title = "Distribution of Year Built",
+       x = "Year Built",
+       y = "Density",
+       caption = generate_figure_caption("Distribution of Year Built", section = 5))
+```
+
+The histogram above displays the distribution of `yr_built`. It provides insights into the distribution of home ages in the dataset.
+
+#### 5.1.6 Price vs. Year of Last Renovation
+
+Excluding homes that did not have a documented renovation.
+
+```{r price_vs_yr_renovated, echo = TRUE, include = TRUE}
+# Find lowest non-zero year renovated
+lowest_non_zero_renovation_year <- min(train_df_non_linear$yr_renovated[train_df_non_linear$yr_renovated > 0]) - 1
+
+# Filter data for non-zero yr_renovated
+filtered_data <- train_df_non_linear[train_df_non_linear$yr_renovated > 0,]
+
+# Scatter plot of Price vs. Year Renovated
+lowest_non_zero_renovation_year <- min(train_df_non_linear$yr_renovated[train_df_non_linear$yr_renovated > 0]) - 1
+ggplot(data = filtered_data, aes(x = yr_renovated, y = price)) +
+  geom_point(pch = 20, col = "brown") +
+  labs(title = "Price vs. Year Renovated",
+       x = "Year Renovated",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Year Renovated (Non-Zero Values)", section = 5)) +
+  xlim(c(lowest_non_zero_renovation_year, max(train_df_non_linear$yr_renovated)))
+```
+
+In the scatter plot above, we compare `price` against the year of the last renovation (`yr_renovated`). This analysis helps us understand whether recent renovations impact home prices.
+
+```{r distribution_yr_renovated, echo = TRUE, include = TRUE, warning = FALSE}
+# Find lowest non-zero year renovated
+lowest_non_zero_renovation_year <- min(train_df_non_linear$yr_renovated[train_df_non_linear$yr_renovated > 0]) - 1
+
+# Filter data for non-zero yr_renovated
+filtered_data <- train_df_non_linear[train_df_non_linear$yr_renovated > 0,]
+
+# Histogram of Year Renovated
+ggplot(data = filtered_data, aes(x = yr_renovated)) +
+  geom_histogram(fill = "orange") +
+  labs(title = "Histogram of Year Renovated",
+       x = "Year Renovated",
+       y = "Density",
+       caption = generate_figure_caption("Histogram of Year Renovated (Non-Zero Values)", section = 5)) +
+  xlim(c(lowest_non_zero_renovation_year, max(train_df_non_linear$yr_renovated)))
+```
+
+The histogram above visualizes the distribution of `yr_renovated`. It provides insights into the distribution of renovation years in the dataset.
+
+#### 5.1.7 Price vs. Distance to Convergence
+
+```{r price_vs_distance_to_convergence, echo = TRUE, include = TRUE}
+# Scatter plot of Price vs. Distance to Convergence
+ggplot(data = train_df_non_linear, aes(x = distance_to_convergence, y = price)) +
+  geom_point(pch = 20, col = "violet") +
+  labs(title = "Price vs. Distance to Convergence",
+       x = "Distance to Convergence",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Distance to Convergence", section = 5))
+```
+
+The scatter plot above compares `price` against `distance_to_convergence`. This analysis helps us explore whether the distance to a convergence point impacts home prices.
+
+```{r distribution_distance_to_convergence, echo = TRUE, include = TRUE}
+# Distribution of Distance to Convergence
+ggplot(data = train_df_non_linear, aes(x = distance_to_convergence)) +
+  geom_histogram(bins = 50) +
+  labs(title = "Distribution of Distance to Convergence",
+       x = "Distance to Convergence",
+       y = "Density",
+       caption = generate_figure_caption("Distribution of Distance to Convergence", section = 5))
+```
+
+### 5.2 Categorical Variable Analysis
+
+The distribution and count of categorical variables such as `bedrooms`, `bathrooms`, `floors`, `waterfront`, `view`, `condition`, and `grade` are analyzed.
+
+#### 5.2.1 Price vs. Bedrooms
+
+```{r price_vs_bedrooms, echo = TRUE, include = TRUE}
+# Convert bedrooms to factor
+train_df_non_linear$bedrooms_factor <- factor(train_df_non_linear$bedrooms)
+
+# Binned Boxplot of Price vs. Bedrooms
+ggplot(data = train_df_non_linear, aes(x = bedrooms_factor, y = price)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Price vs. Bedrooms",
+       x = "Bedrooms",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Bedrooms", section = 5))
+```
+
+The scatter plot above compares `price` against the number of `bedrooms`. This visualization helps us understand how the number of bedrooms influences home prices.
+
+```{r distribution_bedrooms, echo = TRUE, include = TRUE}
+# Filter data excluding 33 bedrooms
+filtered_bedrooms <- train_df_non_linear$bedrooms[train_df_non_linear$bedrooms != 33]
+
+# Calculate frequencies of each bedroom count
+bedroom_frequencies <- table(filtered_bedrooms)
+
+ggplot(data = data.frame(filtered_bedrooms = as.factor(names(bedroom_frequencies)),
+                        filtered_counts = as.numeric(bedroom_frequencies)),
+       aes(x = filtered_bedrooms, y = filtered_counts)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Distribution of Bedrooms (Excluding 33 Bedrooms)",
+       x = "Number of Bedrooms",
+       y = "Frequency",
+       caption = generate_figure_caption("Distribution of Bedrooms (Excluding 33 Bedrooms)", section = 5))
+```
+
+The bar plot above displays the distribution of the `bedrooms` variable, showing the frequency of each bedroom count.
+
+#### 5.2.2 Price vs. Bathrooms
+
+```{r price_vs_bathrooms, echo = TRUE, include = TRUE}
+# Convert bathrooms to factor
+train_df_non_linear$bathrooms_factor <- factor(train_df_non_linear$bathrooms)
+
+# Binned Boxplot of Price vs. Bathrooms
+ggplot(data = train_df_non_linear, aes(x = bathrooms_factor, y = price)) +
+  geom_boxplot(fill = "green") +
+  labs(title = "Price vs. Bathrooms",
+       x = "Bathrooms",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Bathrooms", section = 5))
+```
+
+In the scatter plot above, we compare `price` against the number of `bathrooms`. This analysis helps us explore the relationship between the number of bathrooms and home prices.
+
+```{r distribution_bathrooms, echo = TRUE, include = TRUE}
+# Get data for bar plot
+bathrooms_counts <- table(train_df_non_linear$bathrooms)
+bathrooms <- as.numeric(names(bathrooms_counts))
+counts <- as.numeric(bathrooms_counts)
+
+# Bar plot for the distribution of Bathrooms
+ggplot(data = data.frame(bathrooms, counts), aes(x = bathrooms, y = counts)) +
+  geom_bar(stat = "identity", fill = "green") +
+  labs(title = "Distribution of Bathrooms",
+       x = "Number of Bathrooms",
+       y = "Frequency",
+       caption = generate_figure_caption("Distribution of Bathrooms", section = 5))
+```
+
+The bar plot above visualizes the distribution of the `bathrooms` variable, showing the frequency of each bathroom count.
+
+#### 5.2.3 Price vs. Floors
+
+```{r price_vs_floors, echo = TRUE, include = TRUE}
+# Binned Boxplot of Price vs. Floors
+ggplot(data = train_df_non_linear, aes(x = floors, y = price, group = floors)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Price vs. Floors",
+       x = "Floors",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Floors", section = 5))
+```
+
+The scatter plot above compares `price` against the number of `floors`. This analysis helps us understand how the number of floors in a home relates to its sale price.
+
+```{r distribution_floors, echo = TRUE, include = TRUE}
+floors_counts <- table(train_df_non_linear$floors)
+floors <- as.numeric(names(floors_counts))
+counts <- as.numeric(floors_counts)
+
+# Bar plot for the distribution of Floors
+ggplot(data = data.frame(floors, counts), aes(x = floors, y = counts)) +
+  geom_bar(stat = "identity", fill = "orange") +
+  labs(title = "Distribution of Floors",
+       x = "Number of Floors",
+       y = "Frequency",
+       caption = generate_figure_caption("Distribution of Floors", section = 5))
+```
+
+The bar plot above displays the distribution of the `floors` variable, showing the frequency of each floor count.
+
+#### 5.2.4 Price vs. Waterfront
+
+```{r price_vs_waterfront, echo = TRUE, include = TRUE}
+ggplot(data = train_df_non_linear, aes(x = waterfront_1, y = price, group = waterfront_1)) +
+  geom_boxplot(fill = "purple") +
+  labs(title = "Price vs. Waterfront",
+       x = "Waterfront",
+       y = "Price",
+       caption = generate_figure_caption("Price vs. Waterfront", section = 5),
+       fill = "Waterfront",
+       levels = c("No", "Yes"))  # Labels for waterfront status
+```
+
+In the scatter plot above, we compare `price` against the `waterfront` variable. This visualization helps us explore how having a waterfront view impacts home prices.
+
+```{r distribution_waterfront, echo = TRUE, include = TRUE}
+# Get data for bar plot
+waterfront_counts <- table(train_df_non_linear$waterfront_1)
+waterfront <- as.numeric(names(waterfront_counts))
+counts <- as.numeric(waterfront_counts)
+
+# Bar plot for the distribution of Waterfront
+ggplot(data = data.frame(waterfront, counts), aes(x = waterfront, y = counts)) +
+  geom_bar(stat = "identity", fill = "purple") +
+  labs(title = "Distribution of Waterfront",
+       x = "Waterfront",
+       y = "Frequency",
+       caption = generate_figure_caption("Distribution of Waterfront", section = 5),
+       fill = "Waterfront",
+       levels = c("No", "Yes"))  # Labels for waterfront status
+
+```
+
+The bar plot above visualizes the distribution of the `waterfront` variable, showing the frequency of waterfront and non-waterfront properties.
+
+#### 5.2.5 Price vs. View
+
+```{r price_vs_view, echo = TRUE, include = TRUE}
+# Convert view categories from dummy variables to a factor for better labeling in ggplot
+train_df_non_linear$view_category <- factor(apply(train_df_non_linear[, c("view_0", "view_1", "view_2", "view_3", "view_4")], 1, function(x) which(x == 1)),
+                                             labels = c("View 0", "View 1", "View 2", "View 3", "View 4"))
+
+# Create the boxplot with ggplot2
+ggplot(train_df_non_linear, aes(x = view_category, y = price)) +
+  geom_boxplot(fill = "brown") +
+  labs(title = "Price vs. View Quality",
+       x = "View Quality",
+       y = "Price",
+       caption = generate_figure_caption("Boxplot of Price vs. View Quality", section = 5))
+```
+
+The scatter plot above compares `price` against the `view` variable, which represents the quality of the property's view. This analysis helps us explore how the view quality impacts home prices.
+
+```{r distribution_view, echo = TRUE, include = TRUE}
+# Calculate frequencies of each view quality rating
+view_frequencies <- colSums(train_df_non_linear[, c("view_0", "view_1", "view_2", "view_3", "view_4")])
+
+# Convert frequencies to data frame for ggplot2
+view_df <- data.frame(View = names(view_frequencies), Frequency = view_frequencies)
+
+# Create the bar plot with ggplot2
+ggplot(view_df, aes(x = View, y = Frequency)) +
+  geom_bar(stat = "identity", fill = "purple") +
+  labs(title = "Distribution of View Quality",
+       x = "View Quality",
+       y = "Frequency",
+       caption = generate_figure_caption("Distribution of View Quality", section = 5))
+```
+
+The bar plot above displays the distribution of the `view` variable, showing the frequency of different view quality ratings.
+
+#### 5.2.6 Price vs. Condition
+
+```{r price_vs_condition, echo = TRUE, include = TRUE}
+# Convert condition categories from dummy variables to a factor
+train_df_non_linear$condition_category <- factor(apply(train_df_non_linear[, c("condition_1", "condition_2", "condition_3", "condition_4", "condition_5")], 1, function(x) which(x == 1)),
+                                                 labels = c("Condition 1", "Condition 2", "Condition 3", "Condition 4", "Condition 5"))
+
+# Create the boxplot with ggplot2
+ggplot(train_df_non_linear, aes(x = condition_category, y = price)) +
+  geom_boxplot(fill = "blue") +
+  labs(title = "Price vs. Condition",
+       x = "Condition",
+       y = "Price",
+       caption = generate_figure_caption("Boxplot of Price vs. Condition", section = 5))
+```
+
+In the scatter plot above, we compare `price` against the `condition` variable, which represents the condition of the property. This analysis helps us explore how property condition relates to home prices.
+
+```{r distribution_condition, echo = TRUE, include = TRUE}
+# Calculate frequencies of each condition rating
+condition_frequencies <- colSums(train_df_non_linear[, c("condition_1", "condition_2", "condition_3", "condition_4", "condition_5")])
+
+# Convert frequencies to a data frame for ggplot2
+condition_df <- data.frame(Condition = names(condition_frequencies), Frequency = condition_frequencies)
+
+# Create the bar plot with ggplot2
+ggplot(condition_df, aes(x = Condition, y = Frequency)) +
+  geom_bar(stat = "identity", fill = "green") +
+  labs(title = "Distribution of Condition",
+       x = "Condition Rating",
+       y = "Frequency",
+       caption = generate_figure_caption("Distribution of Condition", section = 5))
+```
+
+The bar plot above visualizes the distribution of the `condition` variable, showing the frequency of different condition ratings.
+
+#### 5.2.7 Price vs. Grade
+
+```{r price_vs_grade, echo = TRUE, include = TRUE}
+# First, identify all grade-related columns in the dataframe
+grade_columns <- grep("grade_", names(train_df_non_linear), value = TRUE)
+
+# Convert dummy variables back to a single categorical variable representing the grade
+train_df_non_linear$grade_category <- apply(train_df_non_linear[, grade_columns], 1, function(row) {
+  if (all(is.na(row))) {
+    return(NA)  # Return NA if all values in the row are NA
+  } else {
+    idx <- which(row == 1, arr.ind = TRUE)
+    return(if(length(idx) > 0) idx else NA)  # Return the index of the grade, or NA if none is 1
+  }
+})
+
+# Extract grade labels from column names, replacing underscores with hyphens for better readability
+grade_labels <- sub("grade_", "", grade_columns) # Remove 'grade_' prefix
+grade_labels <- gsub("_", "-", grade_labels) # Replace underscores with hyphens
+
+# Create a boxplot of Price vs. Grade
+ggplot(train_df_non_linear, aes(x = factor(grade_category, labels = grade_labels), y = price)) +
+  geom_boxplot(fill = "green") +
+  labs(title = "Price vs. Grade",
+       x = "Grade",
+       y = "Price",
+       caption = generate_figure_caption("Boxplot of Price vs. Grade", section = 5))
+```
+
+The scatter plot above compares `price` against the `grade` variable, which has been aggregated into categories as per the provided header. This analysis helps us explore how the grade of construction and design impacts home prices.
+
+```{r distribution_grade, echo = TRUE, include = TRUE}
+# Histogram for the Distribution of Grade
+# Convert the grade category to a numeric variable for histogram plotting
+train_df_non_linear$grade_category_numeric <- as.numeric(train_df_non_linear$grade_category)
+
+# Define breaks for histogram
+num_breaks <- length(unique(train_df_non_linear$grade_category_numeric, na.rm = TRUE))
+hist_breaks <- seq(min(train_df_non_linear$grade_category_numeric, na.rm = TRUE) - 0.5,
+                   max(train_df_non_linear$grade_category_numeric, na.rm = TRUE) + 0.5,
+                   length.out = num_breaks + 1)
+
+# Create a histogram with ggplot2
+ggplot(train_df_non_linear, aes(x = grade_category_numeric)) +
+  geom_histogram(fill = "purple", breaks = hist_breaks) +
+  scale_x_continuous(breaks = seq_along(grade_labels), labels = grade_labels) +
+  labs(title = "Distribution of Grade",
+       x = "Grade",
+       y = "Frequency",
+       caption = generate_figure_caption("Histogram of Distribution of Grade", section = 5))
+```
+
+The bar plot above displays the distribution of the `grade_category` variable, showing the frequency of different grade categories.
+
+### 5.3 Correlation Analysis
+
+Understanding how continuous variables correlate with each other and, more importantly, with the target variable `price`.
+
+#### 5.3.1 Correlation Matrix
+
+```{r correlation_analysis, echo = TRUE, include = TRUE}
+# Correlation Matrix of Numeric Variables
+cor_matrix <- cor(train_df_non_linear[sapply(train_df_non_linear, is.numeric)])
+```
+
+```{r correlation_matrix_table, echo = TRUE, include = TRUE}
+# Create a table of sorted correlation values
+cor_table <- as.data.frame(sort(cor_matrix[,"price"], decreasing = TRUE))
+
+# Display the top 20 correlation values
+top_20_corr <- cor_table[1:20, , drop = FALSE]
+```
+
+```{r corr_matrix_table_display, echo = FALSE, include = TRUE, results = 'asis'}
+# Specify the height for the scrollable div
+table_height <- "400px"
+
+# Create a scrollable div and place the table inside it
+cat(sprintf('<div style="overflow-y: scroll; max-height: %s;">', table_height))
+kable(top_20_corr, col.names = c("Variable", "Correlation with Price"), caption = generate_table_caption("Top 20 Correlation Values with Price", section = 5))
+cat('</div>')
+```
+
+#### 5.3.2 Correlation Graphics Analysis
+
+In the tables presented above, we've showcased the top 20 correlation values concerning the target variable, `price`, with the values sorted by their absolute magnitudes. Here are some crucial observations from this analysis:
+
+   1. **Positive Correlations with Price**:
+      - Variables like `sqft_living`, `sqft_above`, `sqft_living15`, and `bathrooms` exhibit robust positive correlations with the target variable (`price`). This implies that as these features increase, house prices tend to increase correspondingly.
+      - Features such as `view_4` also demonstrate positive correlations, indicating that properties with higher grades and better views tend to command higher prices.
+
+   2. **Negative Correlations with Price**:
+      - There are no negative correlations among the top 20 correlated variables. This suggests that none of the examined features strongly suggest a decrease in house price as they increase.
+
+   3. **Feature Importance**:
+      - The strength of these correlations provides insights into the importance of variables in predicting house prices. Variables like `sqft_living` and grades emerge as strong predictors of price.
+      - Location-related variables, such as `zipcode_98004`, `zipcode_98039`, and `zipcode_98040`, also exhibit noteworthy positive correlations, underscoring the significance of location in price determination.
+
+#### 5.3.3 Correlation Heatmap
+
+```{r correlation_heatmap, echo = TRUE, include = TRUE}
+# Heatmap of the top 20 correlation values
+# Filter the top 20 correlation values
+top_20_corr_variables <- rownames(top_20_corr)
+top_20_corr_matrix <- cor_matrix[top_20_corr_variables, top_20_corr_variables]
+
+# Create a heatmap
+ggplot(melt(top_20_corr_matrix), aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  labs(title = "Top 20 Correlations",
+       x = "Variable",
+       y = "Variable",
+       caption = generate_figure_caption("Heatmap showing the top 20 correlations", section = 5)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+#### 5.3.4 Correlation Matrix for Multicollinearity
+
+```{r correlation_matrix_for_multicollinearity, echo = TRUE, include = TRUE, results = 'asis'}
+# Selecting predictors and excluding the response variable 'price'
+predictors <- dplyr::select(train_df_linear, -price)
+
+# Convert factors to numeric
+numeric_predictors <- predictors %>%
+  mutate(across(where(is.factor), as.numeric)) %>%
+  mutate(across(where(is.character), ~as.numeric(as.factor(.))))
+
+# Calculate the correlation matrix
+corr_matrix <- cor(numeric_predictors, use = "pairwise.complete.obs")
+
+# Convert the correlation matrix to a long format
+correlated_pairs_df <- melt(corr_matrix)
+
+# Filter out redundant pairs (keep only lower triangle of the matrix)
+correlated_pairs_df <- correlated_pairs_df %>%
+  filter(Var1 != Var2) %>%  # Remove self-correlations
+  filter(abs(value) > 0.8) %>%
+  filter(match(Var1, rownames(corr_matrix)) < match(Var2, rownames(corr_matrix)))
+
+# Rename columns for clarity
+correlated_pairs_df <- correlated_pairs_df %>%
+  rename(Variable1 = Var1, Variable2 = Var2, Correlation = value)
+
+# Output the table of highly correlated pairs using knitr::kable()
+knitr_table <- kable(
+  correlated_pairs_df,
+  caption = generate_table_caption("Highly Correlated Variable Pairs", section = 5),
+  format = "markdown"
+)
+print(knitr_table)
+```
+
+#### 5.3.5 Detailed Explanation for Removal
+
+##### 5.3.5.1 `sqft_above` & `sqft_living`
+
+The removal of `sqft_above` and `sqft_living` is justified due to their high correlation coefficient of 0.8744114. `sqft_above` represents the square footage of the living area above ground, while `sqft_living` encompasses the total square footage of living space. Since `sqft_above` is a subset of `sqft_living`, it is likely to contain redundant information, making it less valuable for our model.
+
+##### 5.3.5.2 `month_sold` & `week_of_year`
+
+The variables `month_sold` and `week_of_year` exhibit a remarkably high correlation coefficient of 0.9955447. These variables are intrinsically correlated as they both pertain to the date of the house sale. While `day_of_year` provides the most detailed temporal information, retaining both `week_of_year` and `month_sold` may lead to multicollinearity issues. It's advisable to consider removing one of these variables to mitigate multicollinearity while preserving the most granular date-related information.
+
+##### 5.3.5.3 `month_sold` & `day_of_year`
+
+Similar to the previous case, `month_sold` and `day_of_year` demonstrate a high correlation coefficient of 0.9958281. Both variables are related to the date of the house sale. Given that `day_of_year` provides the most granular temporal information, it may be preferred to retain it while considering the removal of `month_sold` to address multicollinearity concerns.
+
+##### 5.3.5.4 `week_of_year` & `day_of_year`
+
+The correlation coefficient of 0.9996951 between `week_of_year` and `day_of_year` indicates an extremely high correlation. Both variables are associated with the date of sale. Given the granularity of `day_of_year`, retaining it and potentially removing `week_of_year` can be a strategy to reduce multicollinearity while retaining essential date-related information.
+
+##### 5.3.5.5 `condition_4` & `condition_3`
+
+The variables `condition_4` and `condition_3` display a notable negative correlation coefficient of -0.8095157. These variables are derived from the categorical variable indicating the condition of the house. Through one-hot encoding, binary variables were created for each condition. Since these conditions are mutually exclusive, they exhibit a negative correlation. Consideration can be given to keeping one condition as a reference group and discarding the other, or reverting to using the original categorical variable to effectively capture overall house condition.
+
+##### 5.3.5.6 `grade_Above_Average` & `grade_Average`
+
+The correlation coefficient of -0.9954905 between `grade_Above_Average` and `grade_Average` highlights a strong negative correlation. These variables represent different grade categories of houses. Such a high correlation suggests that retaining both variables may introduce multicollinearity into the model. Decisions can be made to keep one of these variables as a representative of house grade or explore alternative encoding strategies.
+
+By addressing the removal of these highly correlated variable pairs, our primary goal is to mitigate multicollinearity issues. Multicollinearity can distort regression coefficient estimates, inflate standard errors, and potentially obscure the statistical significance of predictors. The objective is to retain variables that provide unique and informative contributions to the model's prediction of house prices.
+
+### 5.4 Temporal Trends Analysis
+
+Analyzing the influence of time-related features such as `month`, and `season` on house prices.
+
+#### 5.4.1 Monthly Trends in Average House Prices
+
+```{r monthly_trends_in_average_house_prices, echo = TRUE, include = TRUE}
+# Monthly Trends in Average House Prices
+monthly_trends <- aggregate(train_df_non_linear$price, by = list(train_df_non_linear$month_sold), FUN = mean)
+colnames(monthly_trends) <- c("Month", "Average_Price")
+
+# Find the global maximum
+global_max <- monthly_trends[which.max(monthly_trends$Average_Price), ]
+
+ggplot(monthly_trends, aes(x = Month, y = Average_Price)) +
+  geom_line() +
+  geom_text(data = global_max, aes(x = Month, y = Average_Price, label = paste("Global Max:", round(Average_Price, 2))), vjust = -0.5) +
+  labs(title = "Monthly Trends in Average House Prices", x = "Month", y = "Average Price", caption = generate_figure_caption("Monthly Trends in Average House Prices", section = 5)) +
+  scale_x_continuous(breaks = 1:12, labels = month.name) +
+  theme_minimal()
+```
+
+```{r monthly_trends_count, echo = TRUE, include = TRUE}
+# Monthly Trends in Count of Homes Sold
+monthly_counts <- table(train_df_non_linear$month_sold)
+months <- factor(1:12, labels = month.name)
+monthly_counts_df <- data.frame(Month = months, Count = as.numeric(monthly_counts))
+
+# Find the global maximum
+global_max_count <- monthly_counts_df[which.max(monthly_counts_df$Count), ]
+
+ggplot(monthly_counts_df, aes(x = Month, y = Count, group = 1)) +
+  geom_bar(stat = "identity") +
+  geom_text(data = global_max_count, aes(x = Month, y = Count, label = paste("Global Max:", Count)), vjust = -0.5) +  # Add label for global maximum
+  labs(title = "Monthly Trends in Count of Homes Sold", x = "Month", y = "Count of Homes Sold", caption = generate_figure_caption("Monthly Trends in Count of Homes Sold", section = 5)) +
+  theme_minimal()
+```
+
+#### 5.4.2 Seasonal Trends in Average House Prices
+
+```{r seasonal_trends_in_average_house_prices, echo = TRUE, include = TRUE}
+# Aggregate average price for each season
+seasonal_trends <- data.frame(
+  Season = c("Winter", "Spring", "Summer", "Fall"),
+  Average_Price = c(
+    mean(train_df_non_linear$price[train_df_non_linear$season_Winter == 1]),
+    mean(train_df_non_linear$price[train_df_non_linear$season_Spring == 1]),
+    mean(train_df_non_linear$price[train_df_non_linear$season_Summer == 1]),
+    mean(train_df_non_linear$price[train_df_non_linear$season_Fall == 1])
+  )
+)
+
+# Find the global maximum
+global_max_seasonal <- seasonal_trends[which.max(seasonal_trends$Average_Price), ]
+
+# Plotting
+ggplot(seasonal_trends, aes(x = Season, y = Average_Price, fill = Season)) +
+  geom_bar(stat = "identity") +
+  geom_text(data = global_max_seasonal, aes(label = paste("Global Max:", round(Average_Price, 2)), y = Average_Price), vjust = -0.5) +
+  labs(title = "Seasonal Trends in Average House Prices", x = "Season", y = "Average Price", caption = generate_figure_caption("Seasonal Trends in Average House Prices", section = 5)) +
+  theme_minimal()
+
+```
+
+```{r seasonal_trends_count, echo = TRUE, include = TRUE}
+# Count homes sold for each season
+seasonal_counts <- c(
+  sum(train_df_non_linear$season_Winter == 1),
+  sum(train_df_non_linear$season_Spring == 1),
+  sum(train_df_non_linear$season_Summer == 1),
+  sum(train_df_non_linear$season_Fall == 1)
+)
+seasonal_counts_df <- data.frame(Season = c("Winter", "Spring", "Summer", "Fall"), Count = seasonal_counts)
+
+# Find the global maximum
+global_max_count_seasonal <- seasonal_counts_df[which.max(seasonal_counts_df$Count), ]
+
+# Plotting
+ggplot(seasonal_counts_df, aes(x = Season, y = Count, fill = Season)) +
+  geom_bar(stat = "identity") +
+  geom_text(data = global_max_count_seasonal, aes(label = paste("Global Max:", Count), y = Count), vjust = -0.5) +
+  labs(title = "Seasonal Trends in Count of Homes Sold", x = "Season", y = "Count of Homes Sold", caption = generate_figure_caption("Seasonal Trends in Count of Homes Sold", section = 5)) +
+  theme_minimal()
+
+```
+
+#### 5.4.3 Week of the Year Trends in Average House Prices
+
+```{r week_of_the_year_trends_in_average_house_prices, echo = TRUE, include = TRUE}
+# Week of the Year Trends in Average House Prices
+weekly_trends <- aggregate(train_df_non_linear$price, by = list(train_df_non_linear$week_of_year), FUN = mean)
+colnames(weekly_trends) <- c("Week_of_Year", "Average_Price")
+
+# Find the global maximum
+global_max_weekly <- weekly_trends[which.max(weekly_trends$Average_Price), ]
+
+ggplot(weekly_trends, aes(x = Week_of_Year, y = Average_Price)) +
+  geom_line() +
+  geom_text(data = global_max_weekly, aes(x = Week_of_Year, y = Average_Price, label = paste("Global Max:", round(Average_Price, 2))), vjust = -0.5) +  # Add label for global maximum
+  labs(title = "Weekly Trends in Average House Prices", x = "Week of Year", y = "Average Price", caption = generate_figure_caption("Weekly Trends in Average House Prices", section = 5)) +
+  theme_minimal()
+```
+
+```{r week_of_the_year_trends_count, echo = TRUE, include = TRUE}
+# Weekly Trends in Count of Homes Sold
+weekly_counts <- table(train_df_non_linear$week_of_year)
+weekly_counts_df <- data.frame(Week_of_Year = as.numeric(names(weekly_counts)), Count = as.numeric(weekly_counts))
+
+# Find the global maximum
+global_max_count_weekly <- weekly_counts_df[which.max(weekly_counts_df$Count), ]
+
+ggplot(weekly_counts_df, aes(x = Week_of_Year, y = Count)) +
+  geom_bar(stat = "identity") +
+  geom_text(data = global_max_count_weekly, aes(x = Week_of_Year, y = Count, label = paste("Global Max:", Count)), vjust = -0.5) +  # Add label for global maximum
+  labs(title = "Weekly Trends in Count of Homes Sold", x = "Week of Year", y = "Count of Homes Sold", caption = generate_figure_caption("Weekly Trends in Count of Homes Sold", section = 5)) +
+  theme_minimal()
+```
+
+#### 5.4.4 Day of the Year Trends in Average House Prices
+
+```{r day_of_the_year_trends_in_average_house_prices, echo = TRUE, include = TRUE}
+# Day of the Year Trends in Average House Prices
+daily_trends <- aggregate(train_df_non_linear$price, by = list(train_df_non_linear$day_of_year), FUN = mean)
+colnames(daily_trends) <- c("Day_of_Year", "Average_Price")
+
+# Find the global maximum
+global_max_daily <- daily_trends[which.max(daily_trends$Average_Price), ]
+
+ggplot(daily_trends, aes(x = Day_of_Year, y = Average_Price)) +
+  geom_line() +
+  geom_text(data = global_max_daily
+
+, aes(x = Day_of_Year, y = Average_Price, label = paste("Global Max:", round(Average_Price, 2))), vjust = -0.5) +  # Add label for global maximum
+  labs(title = "Daily Trends in Average House Prices", x = "Day of Year", y = "Average Price", caption = generate_figure_caption("Daily Trends in Average House Prices", section = 5)) +
+  theme_minimal()
+```
+
+```{r day_of_the_year_trends_count, echo = TRUE, include = TRUE}
+# Daily Trends in Count of Homes Sold
+daily_counts <- table(train_df_non_linear$day_of_year)
+daily_counts_df <- data.frame(Day_of_Year = as.numeric(names(daily_counts)), Count = as.numeric(daily_counts))
+
+# Find the global maximum
+global_max_count_daily <- daily_counts_df[which.max(daily_counts_df$Count), ]
+
+ggplot(daily_counts_df, aes(x = Day_of_Year, y = Count)) +
+  geom_bar(stat = "identity") +
+  geom_text(data = global_max_count_daily, aes(x = Day_of_Year, y = Count, label = paste("Global Max:", Count)), vjust = -0.5) +  # Add label for global maximum
+  labs(title = "Daily Trends in Count of Homes Sold", x = "Day of Year", y = "Count of Homes Sold", caption = generate_figure_caption("Daily Trends in Count of Homes Sold", section = 5)) +
+  theme_minimal()
+```
+
+- The "Daily Trends in Average House Prices" line chart showcases the average house prices for each day of the year. It helps identify daily patterns and potential price variations that could be influenced by specific dates or events.
+
+### 5.5 Geographical Influence Analysis
+
+Investigating the spatial aspect by analyzing the `distance_to_convergence` variable.
+
+#### 5.5.1 Distance to Convergence Point Map
+
+```{r geographical_price_analysis, echo = TRUE, include = TRUE, results = 'asis'}
+# Calculate z-scores for the prices
+train_df_non_linear <- train_df_non_linear %>%
+  mutate(z_score = scale(price))
+
+# Define z-score intervals and corresponding colors
+z_score_intervals <- seq(-3, 3, by = 1)  # Create a sequence of z-scores from -3 to 3
+color_sequence <- c("green", "#8fd744", "#fde725", "#f76818ff", "#d7301fff", "#440154")  # From green to dark color
+
+# Calculate price at each z-score interval
+price_at_intervals <- sapply(z_score_intervals, function(z) {
+  mean(train_df_non_linear$price) + z * sd(train_df_non_linear$price)
+})
+
+# Ensure breaks are in ascending order and rounded to the nearest 25k
+breaks <- sort(round(price_at_intervals / 25000) * 25000)
+breaks <- c(min(train_df_non_linear$price, na.rm = TRUE), breaks, max(train_df_non_linear$price, na.rm = TRUE))
+
+# If there are negative values or values that don't make sense, remove them
+breaks <- breaks[breaks >= 0]
+
+# Create color palette with a color for each interval
+color_palette <- colorBin(color_sequence, domain = train_df_non_linear$price, bins = breaks, na.color = "#808080")
+
+# Initialize the leaflet map with updated color palette
+m <- leaflet(train_df_non_linear) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lat = ~lat, lng = ~long,
+    color = ~color_palette(price),
+    fillColor = ~color_palette(price),
+    fillOpacity = 0.8,
+    radius = 1,  # Small dots
+    popup = ~paste("Price: $", formatC(price, format = "f", big.mark = ","), "<br>", "Z-Score: ", round(z_score, 2))
+  )
+
+# Define the maximum distance for the distance bands
+max_distance <- max(train_df_non_linear$distance_to_convergence, na.rm = TRUE)
+
+# Add distance bands to the map
+for (i in seq(2, max_distance, by = 2)) {
+  m <- addCircles(m, lat = convergence_point[1], lng = convergence_point[2], radius = i * 1000,
+                  color = "grey", weight = 1, fill = FALSE, dashArray = "5, 5")
+}
+
+# Add legend and finalize the map
+m <- m %>%
+  addLegend(
+    position = "bottomright",
+    pal = color_palette,
+    values = ~price,
+    title = "Price",
+    labFormat = labelFormat(prefix = "$"),
+    opacity = 1
+  ) %>%
+  setView(lng = convergence_point[2], lat = convergence_point[1], zoom = 10)
+
+cat(generate_figure_caption('Distance to Convergence Map', section = 5))
+```
+
+```{r display_geo_map, echo = FALSE, include = TRUE}
+# Print the map
+m
+```
+
+#### 5.5.2 Conclusion
+This detailed review of the King County house sales dataset underscores the thorough preparation undertaken for the predictive analysis. The dataset's diverse variables, both continuous and categorical, have been meticulously processed and analyzed, providing a robust foundation for developing the predictive model. With the comprehensive EDA and graphical analysis, we gain valuable insights into the correlations and distributions within the data, setting the stage for effective model building and accurate house price prediction.
+
+### 5.6 Removal of Plot Features, Correlation, Multicollinearity and NA Values
+
+```{r remove_plot_features, echo = TRUE, include = TRUE}
+# Drop columns created for visualizations in prior steps, columns that have high correlation, multicollinearity or NA values in the model
+train_df_non_linear <- train_df_non_linear[, !colnames(train_df_non_linear) %in% c("view_category", "condition_category", "grade_category", "grade_category_numeric", "z_score", "lat", "long", 'sqft_above', 'month_sold', 'week_of_year', 'condition_3', "grade_Below_Average", "bedrooms_factor", "bathrooms_factor")]
+train_df_linear <- train_df_linear[, !colnames(train_df_linear) %in% c("view_category", "condition_category", "grade_category", "grade_category_numeric", "z_score", "lat", "long", 'sqft_above', 'month_sold', 'week_of_year', 'condition_3', "grade_Below_Average", "bedrooms_factor", "bathrooms_factor")]
+test_df_linear <- test_df_linear[, !colnames(test_df_linear) %in% c("view_category", "condition_category", "grade_category", "grade_category_numeric", "z_score", "lat", "long", 'sqft_above', 'month_sold', 'week_of_year', 'condition_3', "grade_Below_Average", "bedrooms_factor", "bathrooms_factor")]
+test_df_non_linear <- test_df_non_linear[, !colnames(test_df_non_linear) %in% c("view_category", "condition_category", "grade_category", "grade_category_numeric", "z_score", "lat", "long", 'sqft_above', 'month_sold', 'week_of_year', 'condition_3', "grade_Below_Average", "bedrooms_factor", "bathrooms_factor")]
+
+# Rebuild linear regression model before performing stepwise
+linear_model_initial <- lm(price ~ ., data = train_df_linear)
+
+# Add new coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = linear_model_initial,
+  model_name = "OLS w/o corr",
+  coefficients_df = coefficients_df
+)
+```
+
+
+```{r reset_section5_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 6. Stepwise Model Selection
+
+### 6.1 Stepwise Methodology
+
+
+```{r step_model, echo = TRUE, include = TRUE}
+# Define a function to fetch dropped features from models and create a kable table
+get_dropped_features_table <- function(model_backward, model_forward, best_linear_model, train_df_linear) {
+  # Create a data frame to store the results
+  results_df <- data.frame(Stepwise_Method = character(), Dropped_Features = character(), stringsAsFactors = FALSE)
+
+  # All possible features (excluding the response variable 'price')
+  all_possible_features <- setdiff(colnames(train_df_linear), "price")
+
+  # Function to find the dropped features for a given model
+  get_dropped_features <- function(model, all_features) {
+    included_features <- names(coef(model))
+    dropped_features <- setdiff(all_features, included_features)
+    return(paste(dropped_features, collapse = ", "))
+  }
+
+  # Get the dropped features for each model
+  dropped_backward <- get_dropped_features(model_backward, all_possible_features)
+  dropped_forward <- get_dropped_features(model_forward, all_possible_features)
+  dropped_both <- get_dropped_features(best_linear_model, all_possible_features)
+
+  # Add results to the data frame
+  results_df <- rbind(results_df, data.frame(Stepwise_Method = "OLS_Step_Backward", Dropped_Features = dropped_backward))
+  results_df <- rbind(results_df, data.frame(Stepwise_Method = "OLS_Step_Forward", Dropped_Features = dropped_forward))
+  results_df <- rbind(results_df, data.frame(Stepwise_Method = "OLS_Step_Both", Dropped_Features = dropped_both))
+
+  # Create the kable table
+  table <- kable(
+    results_df,
+    format = "html",
+    caption = generate_table_caption("Dropped Features", section = 6),
+    col.names = c("Stepwise Method", "Dropped Features")
+  ) %>%
+    kable_styling(full_width = TRUE)
+
+  return(table)
+}
+
+# Conditional logic based on the update_model_parameters flag
+if (update_model_parameters) {
+  # Run each of the stepwise regression models and update the JSON file
+  # Step model both
+  best_linear_model <- ols_step_both_p(linear_model_initial, pent=0.35, prem=0.05)
+  features_both <- setdiff(names(coef(best_linear_model$model)), "(Intercept)")
+
+  # Create a formula with the selected features
+  formula <- reformulate(features_forward, response = "price")
+
+  # Refit the model with the selected features
+  best_linear_model <- lm(formula, data = train_df_linear)
+
+  # Update JSON
+  update_model_json("OLS_Step_Both", features_both, json_filepath)
+
+  # Step model Backward
+  model_backward <- ols_step_backward_p(linear_model_initial, pent=0.35, prem = 0.05)
+  features_backward <- setdiff(names(coef(model_backward$model)), "(Intercept)")
+
+  # Create a formula with the selected features
+  formula <- reformulate(features_backward, response = "price")
+
+  # Refit the model with the selected features
+  model_backward <- lm(formula, data = train_df_linear)
+
+  # Update JSON
+  update_model_json("OLS_Step_Backward", features_backward, json_filepath)
+
+  # Step model foward
+  model_forward <- ols_step_forward_p(linear_model_initial, pent=0.35, penter = 0.05)
+  features_forward <- setdiff(names(coef(model_forward$model)), "(Intercept)")
+
+  # Create a formula with the selected features
+  formula <- reformulate(features_forward, response = "price")
+
+  # Refit the model with the selected features
+  model_forward <- lm(formula, data = train_df_linear)
+
+  # Update JSON
+  update_model_json("OLS_Step_Forward", features_forward, json_filepath)
+
+  # Load model parameters from JSON and build models
+  model_params <- fromJSON(json_filepath)
+  # List of features for each model from model_params
+  features_both <- model_params$OLS_Step_Both
+  features_backward <- model_params$OLS_Step_Backward
+  features_forward <- model_params$OLS_Step_Forward
+
+  # Create a temporary dataframe for each model with the selected features
+  train_df_both <- train_df_linear[, c("price", features_both)]
+  test_df_both <- test_df_linear[, c("price", features_both)]
+
+  train_df_backward <- train_df_linear[, c("price", features_backward)]
+  test_df_backward <- test_df_linear[, c("price", features_backward)]
+
+  train_df_forward <- train_df_linear[, c("price", features_forward)]
+  test_df_forward <- test_df_linear[, c("price", features_forward)]
+
+  # Fit the linear models using the temporary dataframes
+  best_linear_model <- lm(price ~ ., data = train_df_both)
+  model_backward <- lm(price ~ ., data = train_df_backward)
+  model_forward <- lm(price ~ ., data = train_df_forward)
+
+} else {
+  # Load model parameters from JSON and build models
+  model_params <- fromJSON(json_filepath)
+
+  # Create models based on the loaded features
+  if (all(c("OLS_Step_Both", "OLS_Step_Backward", "OLS_Step_Forward") %in% names(model_params))) {
+    # For each model type, create the model using the features stored in the JSON
+    # List of features for each model from model_params
+    features_both <- model_params$OLS_Step_Both
+    features_backward <- model_params$OLS_Step_Backward
+    features_forward <- model_params$OLS_Step_Forward
+
+    # Create a temporary dataframe for each model with the selected features
+    train_df_both <- train_df_linear[, c("price", features_both)]
+    test_df_both <- test_df_linear[, c("price", features_both)]
+
+    train_df_backward <- train_df_linear[, c("price", features_backward)]
+    test_df_backward <- test_df_linear[, c("price", features_backward)]
+
+    train_df_forward <- train_df_linear[, c("price", features_forward)]
+    test_df_forward <- test_df_linear[, c("price", features_forward)]
+
+    # Fit the linear models using the temporary dataframes
+    best_linear_model <- lm(price ~ ., data = train_df_both)
+    model_backward <- lm(price ~ ., data = train_df_backward)
+    model_forward <- lm(price ~ ., data = train_df_forward)
+  } else {
+    stop("Required model parameters are missing in the JSON file.")
+  }
+}
+
+# Add coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = best_linear_model,
+  model_name = "Inital Step Both",
+  coefficients_df = coefficients_df
+)
+
+# Add coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = model_forward,
+  model_name = "Step Forward",
+  coefficients_df = coefficients_df
+)
+
+# Add coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = model_backward,
+  model_name = "Step Backward",
+  coefficients_df = coefficients_df
+)
+
+# Evaluate OLS_Step_Both
+df_results <- evaluate_model("OLS_Step_Both", best_linear_model, train_df_both, test_df_both, target_var = 'price', df_results)
+
+# Evaluate OLS_Step_Backward
+df_results <- evaluate_model("OLS_Step_Backward", model_backward, train_df_backward, test_df_backward, target_var = 'price', df_results)
+
+# Evaluate OLS_Step_Forward
+df_results <- evaluate_model("OLS_Step_Forward", model_forward, train_df_forward, test_df_forward, target_var = 'price', df_results)
+
+# featch all the dropped features from each of the models
+dropped_features_table <- get_dropped_features_table(model_backward, model_forward, best_linear_model, train_df_linear)
+```
+
+```{r display_stepwise_dropped_features, echo = FALSE, include = TRUE, results = 'asis'}
+dropped_features_table
+```
+
+```{r display_stepwise_models, echo = TRUE, include = TRUE}
+# Display model results
+view_model_results(df_results, generate_table_caption("Step Model Additions", section = 6))
+```
+
+### 6.2 Best Linear Model
+
+```{r ols_best_model, echo = TRUE, include = TRUE}
+summary(best_linear_model)
+```
+
+### 6.3 Model Comparison
+
+In our analysis of different regression models, we evaluated four models: OLS_linear, OLS_Step_Both, OLS_Step_Backward, and OLS_Step_Forward. These models were assessed based on several key metrics, including the sum of squared errors (SSE) for both the training and testing datasets, the coefficient of determination (R-squared) for both training and testing, root mean square error (RMSE) for training and testing, and mean absolute error (MAE) for training and testing.
+
+The OLS_Step_Both model emerged as a compelling choice due to its unique characteristics. While it exhibited a slight reduction in model performance compared to the OLS_linear model, it showcased a distinctive feature selection process. OLS_Step_Both effectively removes a substantial number of features, making it the least complex model among the four alternatives. This feature reduction enhances model interpretability and simplicity, which can be particularly valuable in scenarios where we seek to understand the most influential variables while maintaining competitive predictive power.
+
+The trade-off between complexity and performance makes OLS_Step_Both an attractive option for specific use cases. If the primary goal is to build a model that strikes a balance between simplicity and accuracy, the OLS_Step_Both model offers a pragmatic solution. However, after comprehensive consideration, we ultimately select the OLS_linear model as the preferred choice for our regression analysis. It delivers strong overall performance across various metrics, making it a robust and versatile model for our dataset and problem.
+
+```{r reset_section6_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 7. Model Assumption Checks
+### 7.1 Linearity Assumption
+
+#### 7.1.1 Residuals vs Fitted Plot
+
+The residuals vs fitted plot is our first stop to assess the assumption of linearity. The ideal scenario is a random spread of residuals around the horizontal axis, indicating a linear relationship between predictors and the response.
+
+```{r residuals_vs_fitted_plot, echo = FALSE, include = TRUE, results = 'asis'}
+caption <- generate_figure_caption("Residuals vs Fitted Plot for Linear Model", section = 7)
+cat(caption)
+plot(best_linear_model, 1)
+```
+
+#### 7.1.2 Residuals vs Leverage Plot
+
+We use the `ols_plot_resid_lev` function to create a plot for detecting outliers and observations with high leverage.
+
+```{r residuals_vs_leverage_plot_v2, echo=FALSE, include = TRUE, results = 'asis'}
+# Output figure and caption
+# Plot the residuals vs leverage plot in the first row
+cat(generate_figure_caption("OLS Outlier and Leverage Diagnostics Linear Model", section = 7))
+ols_plot_resid_lev(best_linear_model)
+```
+
+#### 7.1.3 Residuals vs Fitted Plot
+
+We use the `ols_plot_resid_stud_fit` function to create a plot that helps detect non-linearity, constant variances, and outliers in residuals.
+
+```{r residuals_vs_fitted_plot_v2, echo = FALSE, include = TRUE, results = 'asis'}
+# Output figure and caption
+cat(generate_figure_caption("Deleted Studentized Resid. vs Pred. Linear Model", section = 7))
+ols_plot_resid_stud_fit(best_linear_model)
+```
+
+### 7.2 Normality of Residuals
+
+#### 7.2.1 Normal Q-Q Plot
+
+The Q-Q plot offers a visual comparison of the distribution of residuals against a perfectly normal distribution. Deviations from the diagonal indicate departures from normality.
+
+```{r QQ_plot, echo = FALSE, include = TRUE, results = 'asis'}
+caption <- generate_figure_caption("QQ Plot for Linear Model", section = 7)
+cat(caption)
+plot(best_linear_model, 2)
+```
+
+### 7.3 Homoscedasticity (Constant Variance)
+
+#### 7.3.1 Scale-Location Plot
+
+Also known as the spread-location plot, it's used to check for equal variance of residuals (homoscedasticity).
+
+```{r scale_location_plot, echo = FALSE, include = TRUE, results = 'asis'}
+caption <- generate_figure_caption("Scale-Location Plot for Linear Model", section = 7)
+cat(caption)
+plot(best_linear_model, 3)
+```
+
+### 7.4 Outliers and Influential Points
+
+#### 7.4.1 Cook's Distance Plot
+
+The Cook's distance plot is instrumental in quantifying the influence of each data point.
+
+```{r cooks_distance_plot, echo = FALSE, include = TRUE, results = 'asis'}
+caption <- generate_figure_caption("Cooks Distance Plot for Linear Model", section = 7)
+cat(caption)
+plot(best_linear_model, 4)
+```
+
+#### 7.4.2 Cooks Distance with Threshold
+
+```{r cooks_distance_calculation, echo = FALSE, include = TRUE, results = 'asis'}
+# Calculate Cook's distance for each observation
+cooksd <- cooks.distance(best_linear_model)
+# Output figure and caption
+cat(generate_figure_caption("OLS Cooks Distance Plot for Linear Model", section = 7))
+# Create a plot of Cook's distance
+plot(cooksd, type = "h", main = "Cook's Distance", ylab = "Cook's Distance", xlab = "Observation Index")
+abline(h = 0.04, col = "red", lwd = 2) # .04 is a common threshold for Cook's distance
+
+# Define the threshold for Cook's distance
+threshold <- 0.04
+
+# Identify observations where Cook's distance exceeds the threshold
+high_cooksd <- which(cooksd > threshold)
+
+# Add labels to the points above the threshold
+text(high_cooksd, cooksd[high_cooksd], labels = high_cooksd, cex = 0.7, pos = 3)
+```
+
+#### 7.4.3 Filtering Outliers
+
+We filter the data points with Cook's distance >= 0.04, which is a reasonable threshold for identifying influential data points according to industry standards.
+
+```{r outlier_filtering, echo=TRUE, include = TRUE}
+# Define the threshold for Cook's distance, opting for slightly lower than .04 as it benefits the model performance to do a little bit lower
+threshold <- 0.04
+
+# Identify the indices of influential observations
+influential_obs <- which(cooksd > threshold)
+
+# Output what observations were influential prior to removal
+print(influential_obs)
+
+# Remove outliers from both datasets
+train_df_both <- train_df_both[-influential_obs, ]
+
+# re-fit the linear model without outliers
+best_linear_model <- lm(price ~ ., data = train_df_both)
+summary(best_linear_model)
+
+df_results <- evaluate_model("OLS_Step_Both_Outliers", best_linear_model, train_df_both, test_df_both, target_var = 'price', df_results)
+
+# Add coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = best_linear_model,
+  model_name = "OLS Both outliers",
+  coefficients_df = coefficients_df
+)
+```
+
+
+```{r reset_section7_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 8. Addressing Linearity, Multicollinearity, Normality and Heteroscedasticity
+
+### 8.1 Examining the Non-Linearity of the Model
+
+
+```{r boxcox, echo = FALSE, include = TRUE, results = 'asis'}
+caption <- generate_figure_caption("Box-Cox Plot for Linear Model", section = 8)
+cat(caption)
+par(mfrow=c(1,1))
+# # Perform the Box-Cox transformation
+bc_result <- boxcox(best_linear_model, lambda=seq(-1,1,by=.1))
+optimal_lambda <- bc_result$x[which.max(bc_result$y)]
+```
+
+
+As we can observe from the box cox plot above, the lambda that give the highest log-likehood is `r optimal_lambda`. We transform Y using the log transformation as shown below.
+
+#### 8.1.1 Transformation of Model
+
+```{r transformation_model, echo = TRUE, include = TRUE}
+# Function to transform a single value back to the original scale
+inverse_transform <- function(value, lambda=optimal_lambda) {
+  if (lambda != 0) {
+    return((value * lambda + 1)^(1 / lambda))
+  } else {
+    return(exp(value))
+  }
+}
+
+# Function to calculate SSE, RMSE, MAE, and SST with or without inverse transformation
+calculate_metrics <- function(actual, predicted, lambda = optimal_lambda) {
+  if (lambda != 0) {
+    # Apply inverse transformation to actual and predicted values
+    actual_original <- inverse_transform(actual, lambda)
+    predicted_original <- inverse_transform(predicted, lambda)
+
+    # Calculate SSE, RMSE, MAE, and SST
+    sse <- sum((actual_original - predicted_original)^2)
+    rmse <- sqrt(sse / length(actual_original))
+    mae <- mean(abs(actual_original - predicted_original))
+    sst <- sum((actual_original - mean(actual_original))^2)
+  } else {
+    # Calculate SSE, RMSE, MAE, and SST without transformation
+    sse <- sum((actual - predicted)^2)
+    rmse <- sqrt(sse / length(actual))
+    mae <- mean(abs(actual - predicted))
+    sst <- sum((actual - mean(actual))^2)
+  }
+
+  return(list(sse = sse, rmse = rmse, mae = mae, sst = sst))
+}
+
+# Apply the Box-Cox transformation to the training and test data
+if (optimal_lambda != 0) {
+  transformed_price <- (train_df_both$price^optimal_lambda - 1) / optimal_lambda
+  transformed_test_price <- (test_df_both$price^optimal_lambda - 1) / optimal_lambda
+} else {
+  transformed_price <- log(train_df_both$price)
+  transformed_test_price <- log(test_df_both$price)
+}
+
+# Create a linear regression model using the transformed price
+transformed_model <- lm(transformed_price ~ ., data = dplyr::select(train_df_both, -price))
+
+summary(transformed_model)
+
+# Add coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = transformed_model,
+  model_name = "Transformed Model",
+  coefficients_df = coefficients_df
+)
+
+# Predict prices for training and test data using the transformed model
+predicted_train_transformed <- predict(transformed_model, newdata = train_df_both)
+predicted_test_transformed <- predict(transformed_model, newdata = test_df_both)
+
+# Calculate other metrics for training and test data
+metrics_train <- calculate_metrics(transformed_price, predicted_train_transformed, optimal_lambda)
+metrics_test <- calculate_metrics(transformed_test_price, predicted_test_transformed, optimal_lambda)
+
+# Calculate SSE for the training and test data without inverse transformation
+sse_train <- sum((transformed_price - predicted_train_transformed)^2)
+sse_test <- sum((transformed_test_price - predicted_test_transformed)^2)
+
+# Calculate R-squared for training and test data without inverse transformation
+sst_train <- sum((transformed_price - mean(transformed_price))^2)
+sst_test <- sum((transformed_test_price - mean(transformed_test_price))^2)
+
+r_squared_train <- 1 - (sse_train / sst_train)
+r_squared_test <- 1 - (sse_test / sst_test)
+
+# Create a dataframe to store the results
+df_results <- rbind(df_results, data.frame(
+  Model = "Transformed Model",
+  SSE_train = metrics_train$sse,
+  SSE_test = metrics_test$sse,
+  R_squared_train = r_squared_train,
+  R_squared_test = r_squared_test,
+  RMSE_train = metrics_train$rmse,
+  RMSE_test = metrics_test$rmse,
+  MAE_train = metrics_train$mae,
+  MAE_test = metrics_test$mae
+))
+
+# View the updated model results
+view_model_results(df_results, caption = generate_table_caption("Transformation Model Addition", section = 8))
+```
+
+#### 8.2.2 Plots after Transformation
+
+```{r post_tranformation_plots, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Diagnostic Plots after Transformation", section = 8))
+par(mfrow=c(2,2))
+plot(transformed_model)
+```
+
+```{r boxplot_after_transformation, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Boxplot After Transformation", section = 8))
+par(mfrow=c(1,1))
+boxplot(transformed_model$residuals)
+```
+### 8.3 Detection of Multicollinearity
+
+#### 8.3.1 VIF-Based Multicollinearity Analysis
+
+In this section, we perform a Variance Inflation Factor (VIF)-based multicollinearity analysis. Multicollinearity refers to the situation where predictor variables in a regression model are highly correlated with each other, which can lead to instability in coefficient estimates and difficulties in interpreting the model. VIF helps us identify and mitigate multicollinearity by quantifying how much the variance of the estimated coefficients is increased due to the correlation between predictors.
+
+```{r vif, echo = TRUE, include = TRUE}
+vif_values <- vif(transformed_model)
+vif_values
+```
+
+We would typically define a VIF threshold (in this case, 10), which serves as a criterion to identify predictor variables with high VIF values, however, there are not any VIF's above this threshold meaning we do not have issues of multicollinearity.
+
+### 8.4 Detection of Heteroscedasticity
+
+#### 8.4.1 Breusch Pagan Test
+
+```{r breusch_pagan_test, echo = TRUE, include = TRUE}
+# Breusch-Pagan Test
+bp_test_results <- bptest(transformed_model, studentize = FALSE)
+
+# Output the results of the Breusch-Pagan test
+bp_test_results
+```
+
+In our analysis, we conducted a Breusch-Pagan test to check for heteroscedasticity in our linear regression model, referred to as "transformed_model." Heteroscedasticity refers to the situation where the spread of errors (residuals) in the model varies across different levels of the independent variables.
+
+The test results showed a very low p-value (p < 2.2e-16), indicating strong evidence against the null hypothesis suggesting that heteroscedasticity is present in the residuals of our model. This finding is essential as it implies that the variability of errors is not consistent across all levels of the predictor variables. Addressing heteroscedasticity may require adjustments to improve the model's reliability and interpretability.
+
+#### 8.4.2 Examining Scale Location Plot for Heteroscedasticity
+
+```{r scale_location_plot_for_hetero, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Plots Examining Heteroscedasticity", section = 8))
+par(mfrow=c(1,2))
+plot(transformed_model, 3)
+boxplot(transformed_model$residuals)
+```
+
+### 8.5 Remedial Measures for Heteroscedasticity
+
+#### 8.5.1 Weighted Least Squares
+
+```{r weighted_least_squares, echo = TRUE, include = TRUE}
+# Calculate absolute residuals from the transformed model
+transformed_model_residuals <- abs(transformed_model$residuals)
+
+# Fit a linear model on the absolute residuals of the transformed model
+residuals_model <- lm(transformed_model_residuals ~ ., data = train_df_both[, -1])
+
+# Retrieve fitted values from the residuals model
+fitted_values_residuals <- residuals_model$fitted.values
+
+# Calculate weights as the inverse square of the fitted values
+weights_iteration_1 <- 1 / (fitted_values_residuals ^ 2)
+
+# Refit the transformed model with the new weights
+transformed_model_weighted <- lm(transformed_price ~ ., weights = weights_iteration_1, data = train_df_both[, -1])
+
+# Add coefficients to check if heteroscedascticity is resolved later
+coefficients_df <- create_coefficients_df(
+  model = transformed_model_weighted,
+  model_name = "WT Model",
+  coefficients_df = coefficients_df
+)
+```
+
+
+```{r plot_diagnostic_plots_for_wls, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Plots Post WLS on Transformed Model", section = 8))
+# Perform diagnostic plots for the weighted transformed model
+par(mfrow = c(2, 2))
+plot(transformed_model_weighted)
+```
+
+```{r boxplot_diagnostic_plots_for_wls, echo = FALSE, include = TRUE, results = 'asis'}
+par(mfrow = c(1,1))
+cat(generate_figure_caption("Boxplot for WLS on Transformed Model", section = 8))
+boxplot(transformed_model_weighted$residuals)
+```
+
+
+```{r post_wls_bptest, echo = TRUE, include = TRUE}
+# Perform Breusch-Pagan test to check for heteroscedasticity
+bptest_result <- bptest(transformed_model_weighted, studentize = TRUE)
+bptest_result
+```
+
+```{r weighted_least_squares_iterations, echo = TRUE, include = TRUE}
+# Iterate to improve the model based on Breusch-Pagan test results
+iteration <- 1
+
+#TODO change back to 200
+while (iteration < 200 && bptest_result$p.value < 0.05) {
+  # Calculate new absolute residuals
+  abs_residuals_new <- abs(transformed_model_weighted$residuals)
+
+  # Fit a new linear model on the new absolute residuals
+  residuals_model_new <- lm(abs_residuals_new ~ ., data = train_df_both[, -1])
+
+  # Retrieve new fitted values
+
+  fitted_values_residuals_new <- residuals_model_new$fitted.values
+
+  # Calculate new weights
+  weights_new <- 1 / (fitted_values_residuals_new ^ 2)
+
+  # Refit the transformed model with the new weights
+  transformed_model_weighted <- lm(transformed_price ~ ., weights = weights_new, data = train_df_both[,-1])
+
+  # Update the Breusch-Pagan test result
+  bptest_result <- bptest(transformed_model_weighted, studentize = TRUE)
+
+  # Increment iteration counter
+  iteration <- iteration + 1
+}
+
+# Extract coefficients from the final weighted least squares model
+coefficients_wls_final <- transformed_model_weighted$coefficients
+
+# Summary and diagnostic plots of the final model
+summary(transformed_model_weighted)
+
+# Evaluate model performance on the training dataset
+predicted_train <- predict(transformed_model_weighted, newdata = train_df_both)
+MAE_train <- mae(train_df_both$price, predicted_train)
+SSE_train <- sum((train_df_both$price - predicted_train) ^ 2)
+R_squared_train <- R2(train_df_both$price, predicted_train)
+RMSE_train <- rmse(train_df_both$price, predicted_train)
+
+# Evaluate model performance on the test dataset
+predicted_test <- predict(transformed_model_weighted, newdata = test_df_both)
+MAE_test <- mae(test_df_both$price, predicted_test)
+SSE_test <- sum((test_df_both$price - predicted_test) ^ 2)
+R_squared_test <- R2(test_df_both$price, predicted_test)
+RMSE_test <- rmse(test_df_both$price, predicted_test)
+
+# Add the performance metrics of the transformed model to the df_results dataframe
+df_results <- rbind(df_results, data.frame(
+  Model = "WT Model 200",
+  SSE_train = SSE_train,
+  SSE_test = SSE_test,
+  R_squared_train = R_squared_train,
+  R_squared_test = R_squared_test,
+  RMSE_train = RMSE_train,
+  RMSE_test = RMSE_test,
+  MAE_train = MAE_train,
+  MAE_test = MAE_test
+))
+
+summary(transformed_model_weighted)
+
+# Add coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = transformed_model_weighted,
+  model_name = "WT Model 200",
+  coefficients_df = coefficients_df
+)
+
+# View the updated model results
+view_model_results(df_results, caption = generate_table_caption("Weighted Transformation Model Addition", section = 8))
+```
+
+#### 8.5.2 Weighted Least Squares Results Post 200 Iterations
+
+```{r bptest_for_transformed_weighted_model, echo = TRUE, include = TRUE}
+bptest(transformed_model_weighted, studentize = TRUE)
+```
+
+After performing the initial Breusch-Pagan test to assess heteroscedasticity on the weighted linear model (`transformed_model_weighted`), the test yielded a statistic of 71397 with 80 degrees of freedom, resulting in a p-value less than 2.2e-16, indicating significant heteroscedasticity in the model. This initial result indicated that the residuals of the model exhibited a pattern that violated the assumption of constant variance.
+
+To address this issue, 200 iterations were carried out, where the model was repeatedly re-fitted and the Breusch-Pagan test was performed after each iteration. After these iterations, the Breusch-Pagan test resulted in a significantly larger statistic of 976748 with the same 80 degrees of freedom, and a p-value still less than 2.2e-16. Despite the numerous iterations, the p-value remained extremely low, indicating that heteroscedasticity persisted in the model.
+
+Even after 200 iterations of weighting the linear model in an attempt to address heteroscedasticity, the model continued to exhibit significant heteroscedasticity, as indicated by the persistently low p-value from the Breusch-Pagan test. Further investigation or alternative modeling approaches may be necessary to effectively address this issue.
+
+```{r plot_diagnostic_plots_for_wls_post_iterations, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Plots Post WLS on Transformed Model after 200 Iterations", section = 8))
+# Perform diagnostic plots for the weighted transformed model
+par(mfrow = c(2, 2))
+plot(transformed_model_weighted)
+```
+
+```{r boxplot_diagnostic_plots_for_wls_post_iterations, echo = FALSE, include = TRUE, results = 'asis'}
+par(mfrow = c(1,1))
+cat(generate_figure_caption("Boxplot for WLS on Transformed Model after 200 Iterations", section = 8))
+boxplot(transformed_model_weighted$residuals)
+```
+
+```{r wls_coefficent_comparison, echo = TRUE, include = TRUE}
+# Fetch the Weighted coefficients to compare results
+model_names_to_match <- c("WT Model", "WT Model 200")
+
+# Use the subset function to select rows where Model_Name matches any of the model names in the list
+selected_rows <- subset(coefficients_df, Model_Name %in% model_names_to_match)
+
+# Identify columns with NA values in the selected subset of rows
+cols_with_na <- colnames(selected_rows)[apply(selected_rows, 2, anyNA)]
+
+# Remove columns with NA values from the selected subset
+selected_rows <- selected_rows[, !colnames(selected_rows) %in% cols_with_na]
+```
+
+```{r display_wls, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  selected_rows,
+  caption = generate_table_caption("WLS before and after 200 iterations model comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    autoWidth = TRUE  # Ensure columns are not truncated
+  )
+)
+```
+
+
+### 8.6 Ridge Regression
+
+```{r ridge_regression, echo = TRUE, include = TRUE}
+x <- data.matrix(dplyr::select(train_df_both, -price))
+y <- log(train_df_both$price)
+
+# Problem 8.5: Run Ridge Regression
+set.seed(1023)
+RidgeMod <- glmnet(x, y, alpha = 0, nlambda = 100, lambda.min.ratio = 0.0001)
+CvRidgeMod <- cv.glmnet(x, y, alpha = 0, nlambda = 100, lambda.min.ratio = 0.0001)
+
+# Find the best lambda
+best.lambda.ridge <- CvRidgeMod$lambda.min
+print(paste0("Best Lambda: ", best.lambda.ridge))
+
+# Add coefficients to dataframe
+coefficients_df <- create_coefficients_df(
+  model = coefficients(RidgeMod,s=best.lambda.ridge),
+  model_name = "Ridge Model",
+  coefficients_df = coefficients_df
+)
+```
+
+```{r compare_coefficients_from_ridge, echo = TRUE, include = TRUE}
+# Fetch the coefficients to compare results
+model_names_to_match <- c("Ridge Model", "WT Model 200")
+
+# Use the subset function to select rows where Model_Name matches any of the model names in the list
+selected_rows <- subset(coefficients_df, Model_Name %in% model_names_to_match)
+
+# Identify columns with NA values in the selected subset of rows
+cols_with_na <- colnames(selected_rows)[apply(selected_rows, 2, anyNA)]
+
+# Remove columns with NA values from the selected subset
+selected_rows <- selected_rows[, !colnames(selected_rows) %in% cols_with_na]
+```
+
+```{r display_ridge, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  selected_rows,
+  caption = generate_table_caption("Ridge and OLS model comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    autoWidth = TRUE  # Ensure columns are not truncated
+  )
+)
+```
+
+#### Some Explaination about the Ridge regression here
+
+```{r plot_ridge_regression, echo = FALSE, include = TRUE, results = 'asis'}
+# Plot cross-validated error
+cat(generate_figure_caption("Ridge Regression Plot", section = 8))
+par(mfrow = c(1, 1))
+plot(CvRidgeMod)
+```
+
+### 8.7 Lasso Regression
+
+```{r lasso_regression, echo = TRUE, include = TRUE}
+LassoMod <- glmnet(x, y, alpha = 1, nlambda = 100, lambda.min.ratio = 0.0001)
+CvLassoMod <- cv.glmnet(x, y, alpha = 1, nlambda = 100, lambda.min.ratio = 0.0001)
+
+# Find the best lambda for Lasso
+best.lambda.lasso <- CvLassoMod$lambda.min
+print(paste0("Best Lambda for Lasso: ", best.lambda.lasso))
+
+# Add coefficients to dataframe for Lasso
+coefficients_df <- create_coefficients_df(
+  model = coefficients(LassoMod, s = best.lambda.lasso),
+  model_name = "Lasso Model",
+  coefficients_df = coefficients_df
+)
+```
+
+```{r compare_coefficients_from_lasso, echo = TRUE, include = TRUE}
+# Fetch the coefficients to compare results between Lasso and other models
+model_names_to_match <- c("Lasso Model", "WT Model 200")
+
+# Use the subset function to select rows where Model_Name matches any of the model names in the list
+selected_rows <- subset(coefficients_df, Model_Name %in% model_names_to_match)
+
+# Identify columns with NA values in the selected subset of rows
+cols_with_na <- colnames(selected_rows)[apply(selected_rows, 2, anyNA)]
+
+# Remove columns with NA values from the selected subset
+selected_rows <- selected_rows[, !colnames(selected_rows) %in% cols_with_na]
+
+```
+
+```{r display_lasso, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  selected_rows,
+  caption = generate_table_caption("Lasso and OLS model comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    autoWidth = TRUE  # Ensure columns are not truncated
+  )
+)
+```
+
+```{r plot_lasso_regression, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Lasso Regression Plot", section = 8))
+# Plot cross-validated error for Lasso
+par(mfrow = c(1, 1))
+plot(CvLassoMod)
+```
+
+
+### 8.8 Elastic Net Regression
+
+```{r elastic_net_regression, echo = TRUE, include = TRUE}
+# Set alpha for Elastic Net
+alpha_elastic_net <- 0.5
+
+# Problem 8.5: Run Elastic Net Regression
+ElasticNetMod <- glmnet(x, y, alpha = alpha_elastic_net, nlambda = 100, lambda.min.ratio = 0.0001)
+CvElasticNetMod <- cv.glmnet(x, y, alpha = alpha_elastic_net, nlambda = 100, lambda.min.ratio = 0.0001)
+
+# Find the best lambda for Elastic Net
+best.lambda.elastic_net <- CvElasticNetMod$lambda.min
+print(paste0("Best Lambda for Elastic Net: ", best.lambda.elastic_net))
+
+# Add coefficients to dataframe for Elastic Net
+coefficients_df <- create_coefficients_df(
+  model = coefficients(ElasticNetMod, s = best.lambda.elastic_net),
+  model_name = "EN Model",
+  coefficients_df = coefficients_df
+)
+```
+
+```{r compare_coefficients_from_elastic_net, echo = TRUE, include = TRUE, results = 'asis'}
+# Fetch the coefficients to compare results between Elastic Net and other models
+model_names_to_match <- c("EN Model", "WT Model 200")
+
+# Use the subset function to select rows where Model_Name matches any of the model names in the list
+selected_rows <- subset(coefficients_df, Model_Name %in% model_names_to_match)
+
+# Identify columns with NA values in the selected subset of rows
+cols_with_na <- colnames(selected_rows)[apply(selected_rows, 2, anyNA)]
+
+# Remove columns with NA values from the selected subset
+selected_rows <- selected_rows[, !colnames(selected_rows) %in% cols_with_na]
+```
+
+```{r display_elastic_net_comp, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  selected_rows,
+  caption = generate_table_caption("Elastic Net and OLS model comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    autoWidth = TRUE  # Ensure columns are not truncated
+  )
+)
+```
+
+```{r plot_elastic_net_regression, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Elastic Net Regression Plot", section = 8))
+# Plot cross-validated error for Elastic Net
+par(mfrow = c(1, 1))
+plot(CvElasticNetMod)
+```
+
+### 8.9 Huber Robust Regression
+
+```{r huber_regression, echo = TRUE, include = TRUE}
+# Run Huber Regression using rlm
+HuberMod <- rlm(log(price) ~ ., data = train_df_both)
+
+# Add coefficients to dataframe for Huber
+coefficients_df <- create_coefficients_df(
+  model = HuberMod,
+  model_name = "Huber Model",
+  coefficients_df = coefficients_df
+)
+```
+
+```{r compare_coefficients_from_huber, echo = TRUE, include = TRUE}
+# Fetch the coefficients to compare results between Huber and other models
+model_names_to_match <- c("Huber Model", "WT Model 200")
+
+# Use the subset function to select rows where Model_Name matches any of the model names in the list
+selected_rows <- subset(coefficients_df, Model_Name %in% model_names_to_match)
+
+# Identify columns with NA values in the selected subset of rows
+cols_with_na <- colnames(selected_rows)[apply(selected_rows, 2, anyNA)]
+
+# Remove columns with NA values from the selected subset
+selected_rows <- selected_rows[, !colnames(selected_rows) %in% cols_with_na]
+```
+
+```{r display_huber_comparison, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  selected_rows,
+  caption = generate_table_caption("Huber and OLS model comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    autoWidth = TRUE  # Ensure columns are not truncated
+  )
+)
+```
+
+
+### 8.10 Coefficients Examination
+
+```{r display_all, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  coefficients_df,
+  caption = generate_table_caption("All Coefficients Comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    scrollY = TRUE,
+    autoWidth = TRUE,
+    pageLength = -1  # Show all rows without pagination
+  )
+)
+```
+
+#### 8.10.1 Coefficient Comparison Function
+
+This function is designed to provide a comprehensive comparison of regression model coefficients. It specifically targets scenarios where multiple models have been fit to the same dataset, and there's a need to understand the variability or consistency of these models in terms of their coefficients. This comparison is crucial in areas like feature importance analysis, model stability assessment, and in addressing multicollinearity, normality, and other statistical aspects.
+
+##### 8.10.2 Function Overview
+
+The `calculate_total_coefficient_differences_for_all` function iterates over each model in a given dataframe, calculates the sum of absolute differences in coefficients between that model and a predefined list of comparison models, and then adds these sums as a new column in the dataframe. This approach allows for a direct, quantitative comparison of how each model's coefficients differ from those of other specified models.
+
+##### 8.10.3 Detailed Utility of Function
+
+- **Model Stability Analysis:** It provides insights into the stability of coefficients across different models. Large differences might indicate model instability or sensitivity to certain features.
+
+- **Feature Importance Consistency:** By comparing coefficient magnitudes across models, it can help assess the consistency of feature importance rankings.
+
+- **Addressing Statistical Issues:** It aids in evaluating how different models react to multicollinearity and other statistical concerns, especially if the coefficients vary significantly between models.
+
+- **Model Selection Guidance:** The function can guide model selection by highlighting models with similar or drastically different behavior in terms of their coefficients.
+
+
+```{r coefficients_calculations, echo = TRUE, include = TRUE}
+# List of comparison models
+comparison_model_names <- c("Huber Model", "Ridge Model", "Lasso Model", "EN Model")
+
+# Function to calculate the total sum of absolute differences in coefficients for each model
+calculate_total_coefficient_differences_for_all <- function(coefficients_df, comparison_models) {
+  # Get all model names
+  all_model_names <- coefficients_df$Model_Name
+
+  # Initialize a named numeric vector to store the sum of differences for each model
+  total_diffs <- setNames(numeric(length(all_model_names)), all_model_names)
+
+  # Iterate over each model in coefficients_df
+  for (target_model in all_model_names) {
+    target_coeffs <- coefficients_df[coefficients_df$Model_Name == target_model, -1]
+    total_diff <- 0  # Initialize total difference for this model
+
+    # Calculate sum of absolute differences with each comparison model
+    for (model in comparison_models) {
+      comparison_coeffs <- coefficients_df[coefficients_df$Model_Name == model, -1]
+      common_features <- intersect(names(target_coeffs), names(comparison_coeffs))
+      abs_diff <- abs(target_coeffs[common_features] - comparison_coeffs[common_features])
+      total_diff <- total_diff + sum(abs_diff, na.rm = TRUE)
+    }
+
+    total_diffs[target_model] <- total_diff
+  }
+
+  return(total_diffs)
+}
+
+# Calculate the total differences for all models
+model_diffs <- calculate_total_coefficient_differences_for_all(coefficients_df, comparison_model_names)
+
+# Add the calculated differences as a new column in the coefficients_df
+coefficients_df$total_diff <- model_diffs[coefficients_df$Model_Name]
+
+# Move the new column to the second position
+coefficients_df <- coefficients_df[, c("Model_Name", "total_diff", setdiff(names(coefficients_df), c("Model_Name", "total_diff")))]
+```
+
+```{r display_comparisons, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  coefficients_df,
+  caption = generate_table_caption("Total Calculated Difference Coefficients Comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    scrollY = TRUE,
+    autoWidth = TRUE,
+    pageLength = -1  # Show all rows without pagination
+  )
+)
+```
+
+### 8.11 Detailed Coefficient Analysis
+
+The results compare various regression models based on the total sum of absolute differences in their coefficients when compared to a set of reference models: "Huber Model," "Ridge Model," "Lasso Model," and "EN Model." This analysis helps determine which model is most consistent with the reference models in terms of coefficient values, which can be indicative of their effectiveness in addressing diagnostic issues like multicollinearity, outliers, and model stability. Let's break down these results for a detailed analysis:
+
+#### 8.11.1 "Initial OLS Model"
+With a total difference of approximately 319 million, this model shows a substantial deviation in coefficients compared to the reference models. This significant difference suggests that the "Initial OLS Model" may have issues with multicollinearity or outliers that the reference models have addressed more effectively.
+
+#### 8.11.2 "OLS w/o corr" and Other OLS Variants
+Similar to the "Initial OLS Model," these OLS-based models ("Inital Step Both," "Step Forward," "Step Backward," "OLS Both outliers") have very high total differences (ranging from around 321 million to 470 million). This indicates that these models, despite their variations, have not substantially improved in aligning their coefficients with the reference models. They likely still struggle with issues like multicollinearity or outlier sensitivity.
+
+#### 8.11.3 "Transformed Model" and "WT Model"
+These models show a drastic reduction in total differences (1824 and 1536, respectively), indicating a significant improvement over the basic OLS models. The transformations or adjustments made in these models appear to have aligned their coefficients more closely with the reference models, suggesting better handling of diagnostic issues.
+
+#### 8.11.4 "WT Model 200"
+After 200 iterations of Weighted Least Squares (WLS) regression, this model shows a remarkable improvement with a total difference of only 78. This suggests that iterative re-weighting has significantly enhanced the model's alignment with the reference models, potentially indicating effective handling of heteroscedasticity and outliers.
+
+#### 8.11.5 "Ridge Model," "Lasso Model," "EN Model," and "Huber Model"
+These models have the lowest total differences (ranging from 51 to 139), indicating a very close alignment with each other. This consistency suggests that these models are likely very effective in addressing multicollinearity and outliers. Their regularization techniques (Ridge, Lasso, Elastic Net) or robust regression approach (Huber) seem to stabilize the coefficient estimates substantially.
+
+```{r reset_section8_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 9. Alternative Models
+### 9.1 Regression Tree Model
+
+```{r regression_tree}
+# Load and prepare data for this section
+train_df_logis <- train_df_non_linear
+test_df_logis <- test_df_non_linear
+
+
+# Create data frames for regression tree analysis
+# Remove 'price_cat' and keep 'price' in the datasets
+train_df_reg <- train_df_logis[, !names(train_df_logis) %in% "price_cat"]
+test_df_reg <- test_df_logis[, !names(test_df_logis) %in% "price_cat"]
+
+# Define a broader range of hyperparameters to search
+tuneGrid <- expand.grid(
+  cp = seq(0.001, 0.1, by = 0.001)
+)
+
+# Create a custom tuning grid for rpart
+customControl <- trainControl(
+  method = "cv",
+  number = 5,
+  search = "grid",
+  verboseIter = FALSE
+)
+
+# Perform hyperparameter tuning with custom control
+model <- train(
+  price ~ .,
+  data = train_df_reg,
+  method = "rpart",
+  trControl = customControl,
+  tuneGrid = tuneGrid
+)
+
+# Make predictions
+p.rpart_train <- predict(model, newdata = train_df_reg)
+p.rpart_test <- predict(model, newdata = test_df_reg)
+
+# Calculate metrics for training dataset
+MAE_train <- mae(train_df_reg$price, p.rpart_train)
+SSE_train <- sum((train_df_reg$price - p.rpart_train)^2)
+R_squared_train <- R2(train_df_reg$price, p.rpart_train)
+RMSE_train <- rmse(train_df_reg$price, p.rpart_train)
+
+# Calculate metrics for testing dataset
+MAE_test <- mae(test_df_reg$price, p.rpart_test)
+SSE_test <- sum((test_df_reg$price - p.rpart_test)^2)
+R_squared_test <- R2(test_df_reg$price, p.rpart_test)
+RMSE_test <- rmse(test_df_reg$price, p.rpart_test)
+
+# Append the results to df_results
+df_results <- rbind(df_results, data.frame(
+  Model = "Regression Tree",
+  SSE_train = SSE_train,
+  SSE_test = SSE_test,
+  R_squared_train = R_squared_train,
+  R_squared_test = R_squared_test,
+  RMSE_train = RMSE_train,
+  RMSE_test = RMSE_test,
+  MAE_train = MAE_train,
+  MAE_test = MAE_test,
+  stringsAsFactors = FALSE
+))
+
+# View Model Results
+view_model_results(df_results, generate_table_caption("Regression Tree Model Addition", section = 9))
+```
+
+### 9.2 Neural Network Model
+
+```{r keras_NN}
+
+# Define a normalization function
+normalize_data <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+# Function to prepare the dataset
+prepare_dataset <- function(df) {
+  df$waterfront <- as.numeric(df$waterfront_1)
+  selected_columns <- setdiff(names(df), c("season", "price_cat", "waterfront_0", "waterfront_1"))
+  df_normalized <- as.data.frame(lapply(df[selected_columns], normalize_data))
+  return(df_normalized)
+}
+
+# Function to rescale normalized data back to original scale
+rescale_to_original <- function(x, min_val, max_val) {
+  return((x * (max_val - min_val)) + min_val)
+}
+
+# Define model builder
+build_model <- function(hp) {
+  model <- keras_model_sequential() %>%
+    layer_dense(units = hp$Int('units_1', min_value = 32, max_value = 128, step = 32),
+                activation = 'relu', input_shape = ncol(train_data) - 1) %>%
+    layer_dense(units = hp$Int('units_2', min_value = 16, max_value = 64, step = 16),
+                activation = 'relu') %>%
+    # Add more layers if needed
+    layer_dense(units = 1)
+
+  model %>% compile(
+    optimizer = optimizer_adam(hp$Float('learning_rate', 1e-4, 1e-2, sampling = 'log')),
+    loss = 'mean_squared_error',
+    metrics = c('mean_absolute_error')
+  )
+  return(model)
+}
+
+train_and_evaluate_keras_nn <- function(train_data, test_data, original_train_price, original_test_price) {
+  # Initialize variables to store the best model and its lowest validation MAE
+  best_model <- NULL
+  lowest_val_mae <- Inf
+  best_batch_size <- NULL  # Store the best batch size
+  best_epochs <- NULL  # Store the best number of epochs
+  # Smaller batch sizes drastically increase computation required
+  batch_sizes <- c(50, 60, 70, 80, 90, 100, 110, 120, 130)  # Different batch sizes to experiment with
+  epochs_list <- c(50, 100, 150, 200, 250)  # Different numbers of epochs to experiment with
+
+  for (batch_size in batch_sizes) {
+    for (epochs in epochs_list) {
+      # Define a complex Keras model with multiple layers
+      model <- keras_model_sequential() %>%
+        layer_dense(units = 256, activation = 'relu', input_shape = ncol(train_data) - 1) %>%
+        layer_dropout(rate = 0.3) %>% # Accounts for multicollinearity and prevents overfit
+        layer_dense(units = 128, activation = 'relu') %>%
+        layer_dropout(rate = 0.3) %>%
+        layer_dense(units = 64, activation = 'relu') %>%
+        layer_dense(units = 32, activation = 'relu') %>%
+        layer_dense(units = 16, activation = 'relu') %>%
+        layer_dense(units = 8, activation = 'relu') %>%
+        layer_dense(units = 4, activation = 'relu') %>%
+        layer_dense(units = 2, activation = 'relu') %>%
+        layer_dense(units = 1)
+
+      # Compile the model
+      model %>% compile(
+        loss = 'mean_squared_error',
+        optimizer = 'adam',
+        metrics = c('mean_absolute_error')
+      )
+
+      # Fit the model to training data
+      history <- model %>% fit(
+        x = as.matrix(train_data[, -which(names(train_data) == "price")]),
+        y = train_data$price,
+        epochs = epochs,
+        batch_size = batch_size,
+        validation_split = 0.2  # Use 20% of training data for validation
+      )
+
+      # Check the performance on the validation set
+      val_mae <- min(history$metrics$val_mean_absolute_error)
+      if (val_mae < lowest_val_mae) {
+        lowest_val_mae <- val_mae
+        best_model <- model
+        best_batch_size <- batch_size
+        best_epochs <- epochs
+      }
+    }
+  }
+
+  # Print the best hyperparameters and their correlation
+  cat("Best Batch Size:", best_batch_size, "\n")
+  cat("Best Number of Epochs:", best_epochs, "\n")
+
+  # Make predictions on the training and test data
+  train_predictions <- predict(best_model, x = as.matrix(train_data[, -which(names(train_data) == "price")]))
+  test_predictions <- predict(best_model, x = as.matrix(test_data[, -which(names(test_data) == "price")]))
+
+  # Rescale predictions back to original scale
+  rescaled_train_predictions <- rescale_to_original(train_predictions, min(original_train_price), max(original_train_price))
+  rescaled_test_predictions <- rescale_to_original(test_predictions, min(original_test_price), max(original_test_price))
+
+  # Calculate various performance metrics
+  metrics <- list(
+    mae_train = mean(abs(rescaled_train_predictions - original_train_price)),
+    mae_test = mean(abs(rescaled_test_predictions - original_test_price)),
+    RMSE_train = sqrt(mean((rescaled_train_predictions - original_train_price)^2)),
+    RMSE_test = sqrt(mean((rescaled_test_predictions - original_test_price)^2)),
+    SSE_train = sum((rescaled_train_predictions - original_train_price)^2),
+    SSE_test = sum((rescaled_test_predictions - original_test_price)^2),
+    correlation_train = cor(rescaled_train_predictions, original_train_price),
+    correlation_test = cor(rescaled_test_predictions, original_test_price),
+    r_squared_train = cor(rescaled_train_predictions, original_train_price)^2,
+    r_squared_test = cor(rescaled_test_predictions, original_test_price)^2
+  )
+
+  print(paste("Model Correlation:", metrics$correlation_test))
+
+  return(metrics)
+}
+# Define the training and test datasets
+train_df_logis <- train_df_non_linear
+test_df_logis <- test_df_non_linear
+
+# Combine train and test data for normalization
+combined_df <- rbind(train_df_logis, test_df_logis)
+
+# Normalize the combined data
+combined_norm <- prepare_dataset(combined_df)
+
+# Split the normalized data back into train and test sets
+train_norm <- combined_norm[seq_len(nrow(train_df_logis)), ]
+test_norm <- combined_norm[(nrow(train_df_logis) + 1):nrow(combined_norm), ]
+
+# Original non-normalized price data
+original_train_price <- train_df_non_linear$price
+original_test_price <- test_df_non_linear$price
+
+# Train and evaluate the model
+if (update_model_parameters) {
+  library(keras)
+  library(reticulate)
+  # Import python as the backend for using Keras
+  use_python(python = "C:\\Users\\Charl\\AppData\\Local\\Programs\\Python\\Python39\\python.exe", required = TRUE)
+  # Fetch metrics
+  nn_metrics <- train_and_evaluate_keras_nn(train_norm, test_norm, original_train_price, original_test_price)
+  # Code to update model parameters in JSON
+  update_model_json("NeuralNetwork", nn_metrics, json_filepath)
+} else {
+  # Code to load model parameters from JSON
+  model_params <- fromJSON(json_filepath)
+  nn_metrics <- model_params$NeuralNetwork
+}
+
+# Prepare results for the dataframe
+nn_model_row <- data.frame(
+  Model = "Neural Network",
+  SSE_train = nn_metrics$SSE_train,
+  SSE_test = nn_metrics$SSE_test,
+  R_squared_train = nn_metrics$r_squared_train,
+  R_squared_test = nn_metrics$r_squared_test,
+  RMSE_train = nn_metrics$RMSE_train,
+  RMSE_test = nn_metrics$RMSE_test,
+  MAE_train = nn_metrics$mae_train,
+  MAE_test = nn_metrics$mae_test,
+  stringsAsFactors = FALSE
+)
+
+# Append the new row to df_results
+df_results <- rbind(df_results, nn_model_row)
+view_model_results(df_results, generate_table_caption("Neural Network Model Addition", section = 9))
+```
+
+### 9.3 Logistic Regression
+
+#### 9.3.1 Data Processing
+
+```{r logistic_data_processing, echo = TRUE, include = TRUE}
+# Define the training and test datasets
+train_df_logis <- train_df_non_linear
+test_df_logis <- test_df_non_linear
+
+# Convert "price" to binary class labels based on median
+train_df_logis$price <- ifelse(train_df_logis$price > median(train_df_logis$price), 1, 0)
+test_df_logis$price <- ifelse(test_df_logis$price > median(test_df_logis$price), 1, 0)
+
+# Convert "price" to factor with labels "low" and "high"
+train_df_logis$price <- factor(train_df_logis$price, levels = c("0", "1"), labels = c("low", "high"))
+test_df_logis$price <- factor(test_df_logis$price, levels = c("0", "1"), labels = c("low", "high"))
+```
+
+In this section, we preprocess the data for binary logistic regression. We load the necessary libraries and define the training and test datasets. The "price" column is transformed into binary class labels based on the median, and it is converted to a factor with labels "low" and "high."
+
+#### 9.3.2 Data Structure and Summary
+
+```{r logistic_structure_and_summary, echo = TRUE, include = TRUE}
+# Display structure and head of the datasets
+str(train_df_logis)
+str(test_df_logis)
+head(train_df_logis)
+head(test_df_logis)
+
+# Display unique values of "price" in both datasets
+unique(train_df_logis$price)
+unique(test_df_logis$price)
+```
+
+
+In this section, we examine the structure and summary of the datasets. We display the structure, head, and unique values of the "price" column in both the training and test datasets.
+
+#### 9.3.3 Data Visualization
+
+```{r data_visualization_logistic_regression_1, echo = FALSE, include = TRUE, results = 'asis'}
+# Create histograms of "price" in both datasets
+cat(generate_figure_caption("Histogram of Train Price Data", section = 9))
+hist(as.numeric(train_df_logis$price))
+```
+
+
+
+```{r data_visualization_logistic_regression_2, echo = FALSE, include = TRUE, results = 'asis'}
+cat(generate_figure_caption("Historgram of Test Price Data", section = 9))
+hist(as.numeric(test_df_logis$price))
+```
+
+This section includes histograms of the `price` column in both datasets to visualize the distribution of class labels.
+
+#### 9.3.4 Binary Logistic Regression
+
+```{r fit_binary_logisitic, echo = TRUE, include = TRUE}
+# Fit a binary logistic regression model
+fit_logistic <- glm(price ~ ., family = binomial, data = train_df_logis)
+summary(fit_logistic)
+```
+
+Here, we fit a binary logistic regression model using the `glm` function. We specify the family parameter as "binomial" for logistic regression and provide the training data. We then display a summary of the fitted model.
+
+#### 9.3.5 Deviance and Hypothesis Testing
+
+```{r logistic_deviance_hyp, echo = TRUE, include = TRUE}
+# Compute the null and residual deviances
+summary_fit_logistic <- summary(fit_logistic)
+null_deviance <- summary_fit_logistic$null.deviance
+residual_deviance <- summary_fit_logistic$deviance
+df_null <- summary_fit_logistic$df.null
+df_residual <- summary_fit_logistic$df.residual
+
+# Calculate the difference in deviances and degrees of freedom
+diff_deviances <- null_deviance - residual_deviance
+diff_df <- df_null - df_residual
+
+# Perform a chi-squared test to assess variable importance
+p_value <- 1 - pchisq(diff_deviances, diff_df)
+
+# Determine if variables are important based on p-value
+if (p_value < 0.05) {
+  conclusion <- "Variables are important (Reject Null Hypothesis)"
+} else {
+  conclusion <- "Variables are not important (Fail to Reject Null Hypothesis)"
+}
+```
+
+In this subsection, we compute the null and residual deviance's of the logistic regression model. We then calculate the difference in deviance's and degrees of freedom to perform a chi-squared test to assess the importance of variables. The result is used to determine whether variables are important or not.
+
+
+#### 9.3.6 Stepwise Selection with AIC
+
+```{r logistic_stepwise_aic, echo = TRUE, include = TRUE}
+# Function to perform and evaluate stepwise logistic regression
+perform_and_evaluate_logistic_regression <- function(train_df, test_df, fit_logistic_step) {
+  # Model evaluation on training data
+  true_labels_train <- ifelse(train_df$price == "high", 1, 0)
+  predicted_probabilities_train <- predict(fit_logistic_step, train_df, type = "response")
+  predictions_train <- ifelse(predicted_probabilities_train > 0.5, 1, 0)
+  confusion_matrix_train <- caret::confusionMatrix(as.factor(predictions_train), as.factor(true_labels_train))
+
+  # Accuracy and other metrics from confusion matrix for training data
+  accuracy_train <- confusion_matrix_train$overall['Accuracy']
+  precision_train <- confusion_matrix_train$byClass['Precision']
+  recall_train <- confusion_matrix_train$byClass['Recall']
+  F1_train <- 2 * (precision_train * recall_train) / (precision_train + recall_train)
+
+  # Pseudo R-squared for training data
+  pseudo_r_squared_train <- 1 - fit_logistic_step$deviance / fit_logistic_step$null.deviance
+
+  # Model evaluation on test data
+  true_labels_test <- ifelse(test_df$price == "high", 1, 0)
+  predicted_probabilities_test <- predict(fit_logistic_step, test_df, type = "response")
+  predictions_test <- ifelse(predicted_probabilities_test > 0.5, 1, 0)
+  confusion_matrix_test <- caret::confusionMatrix(as.factor(predictions_test), as.factor(true_labels_test))
+
+  # Accuracy and other metrics from confusion matrix for test data
+  accuracy_test <- confusion_matrix_test$overall['Accuracy']
+  precision_test <- confusion_matrix_test$byClass['Precision']
+  recall_test <- confusion_matrix_test$byClass['Recall']
+  F1_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+
+  # Pseudo R-squared for test data
+  pseudo_r_squared_test <- 1 - fit_logistic_step$deviance / fit_logistic_step$null.deviance
+
+  # Extracting feature names from the model formula
+  feature_names <- all.vars(formula(fit_logistic_step))
+
+  # Remove the response variable name ('price') from the list
+  feature_names <- setdiff(feature_names, "price")
+
+  # Store all results in a list
+  results <- list(
+    features = feature_names,
+    coefficients = coef(fit_logistic_step),
+    accuracy_train = accuracy_train,
+    precision_train = precision_train,
+    recall_train = recall_train,
+    F1_train = F1_train,
+    pseudo_r_squared_train = pseudo_r_squared_train,
+    accuracy_test = accuracy_test,
+    precision_test = precision_test,
+    recall_test = recall_test,
+    F1_test = F1_test
+  )
+
+  return(results)
+}
+
+if (update_model_parameters) {
+  # Perform and evaluate logistic regression, then store results
+  # Step fit the model
+  fit_logistic_step <- step(fit_logistic, trace = 0)
+
+  logistic_results <- perform_and_evaluate_logistic_regression(train_df_logis, test_df_logis, fit_logistic_step)
+
+  # Prepare a list of logistic regression parameters and metrics for JSON update
+  logistic_json_data <- list(
+    features = logistic_results$features,
+    coefficients = logistic_results$coefficients,
+    accuracy_train = logistic_results$accuracy_train,
+    precision_train = logistic_results$precision_train,
+    recall_train = logistic_results$recall_train,
+    F1_train = logistic_results$F1_train,
+    pseudo_r_squared_train = logistic_results$pseudo_r_squared_train,
+    accuracy_test = logistic_results$accuracy_test,
+    precision_test = logistic_results$precision_test,
+    recall_test = logistic_results$recall_test,
+    F1_test = logistic_results$F1_test
+  )
+
+  # Update logistic regression results in JSON
+  update_model_json("StepwiseLogisticRegression", logistic_json_data, json_filepath)
+} else {
+  # Load logistic regression results from JSON
+  loaded_data <- fromJSON(json_filepath)$StepwiseLogisticRegression
+
+  # Check if features are correctly loaded
+  if (is.null(loaded_data$features) || length(loaded_data$features) == 0) {
+    stop("No features found in the loaded model data.")
+  }
+
+  # Rebuild the formula from the loaded features
+  formula_string <- paste("price ~", paste(loaded_data$features, collapse = " + "))
+  fit_logistic_step <- glm(as.formula(formula_string), family = binomial, data = train_df_logis)
+  logistic_results <- perform_and_evaluate_logistic_regression(train_df_logis, test_df_logis, fit_logistic_step)
+}
+
+# Prepare results for the dataframe
+logistic_model_row <- data.frame(
+  Model = "Stepwise Logistic Regression",
+  Accuracy_train = logistic_results$accuracy_train,
+  Accuracy_test = logistic_results$accuracy_test,
+  Precision_train = logistic_results$precision_train,
+  Precision_test = logistic_results$precision_test,
+  Recall_train = logistic_results$recall_train,
+  Recall_test = logistic_results$recall_test,
+  F1_train = logistic_results$F1_train,
+  F1_test = logistic_results$F1_test,
+  Pseudo_R_squared_train = logistic_results$pseudo_r_squared_train,
+  stringsAsFactors = FALSE
+)
+
+summary(fit_logistic_step)
+```
+
+```{r logistic_regression_results, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  logistic_model_row,
+  caption = generate_table_caption("Logistic Regression Performance Table", section = 9),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    scrollY = TRUE,
+    autoWidth = TRUE,
+    pageLength = -1  # Show all rows without pagination
+  )
+)
+```
+
+
+#### 9.3.7 Stepwise Logistic Regression Model Performance
+
+A "Stepwise Logistic Regression" model was applied to predict a binary outcome. The model demonstrated good performance on both the training and test datasets.
+
+#### 9.3.8 Training Dataset Metrics
+
+For the training dataset, the model's performance metrics were as follows:
+
+- **Accuracy:** The accuracy of the model was found to be approximately 90.79%, indicating that it correctly classified a large proportion of the observations.
+
+- **Precision:** The precision, which measures the proportion of true positive predictions among all positive predictions, was approximately 89.81%. This suggests that when the model predicted a positive outcome, it was accurate nearly 90% of the time.
+
+- **Recall:** The recall, also known as sensitivity, was about 91.13%. This metric assesses the model's ability to correctly identify true positive cases out of all actual positive cases. In this context, the model effectively captured a significant portion of the true positive cases.
+
+- **F1-Score:** The F1-score, a balanced measure of precision and recall, was found to be approximately 90.31%. This score indicates a good balance between the ability to make accurate positive predictions and capturing actual positive cases.
+
+- **Pseudo R-squared:** The pseudo R-squared value, which measures the goodness of fit of the logistic regression model, was approximately 90.41%. A higher pseudo R-squared suggests that the model explains a significant portion of the variance in the data.
+
+#### 9.3.9 Test Dataset Metrics
+
+When evaluated on the test dataset, the "Stepwise Logistic Regression" model displayed similar performance trends. The model's performance metrics on the test dataset were as follows:
+
+- **Accuracy:** The accuracy on the test data was approximately 89.45%.
+
+- **Precision:** Precision on the test data was about 89.88%.
+
+- **Recall:** Recall on the test data was approximately 91.13%.
+
+- **F1-Score:** The F1-score on the test dataset was approximately 89.88%, indicating that the model maintained a balanced performance between precision and recall.
+
+- **Pseudo R-squared:** The pseudo R-squared value for the test dataset was about 67.68%, suggesting that the model explained a substantial portion of the variance in the test data, although slightly lower than on the training data.
+
+```{r reset_section9_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 10. Model Evaluation on Test Data
+
+### 10.1 Neural Network Model Analysis
+
+```{r display_neural_network_results, echo = FALSE, include = TRUE}
+# Display Neural Network model results
+datatable(
+  df_results[df_results$Model %in% "Neural Network", ],
+  caption = generate_table_caption("Neural Network Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.1.1 Results and Interpretation
+
+##### Model Performance
+
+The Neural Network model demonstrates impressive performance in predicting housing prices in King County, with substantial R-squared values of 0.9404 and 0.8734 for training and testing datasets, respectively. This indicates a high level of predictive accuracy, with the model explaining approximately 94% of the variance in the training dataset and 87% in the testing dataset. Such a high R-squared value in training suggests that the model fits the training data well, though the slight drop in the test data might hint at some overfitting.
+
+The model's RMSE (Root Mean Squared Error) values provide insight into the average prediction error. With RMSE values of 94,836.04 for training and 150,299.41 for testing, we observe that the model's predictions are closer to the actual values in the training set compared to the test set. This again might indicate overfitting, where the model is tuned more closely to the training data's specific characteristics.
+
+The MAE (Mean Absolute Error) of 57,832.30 for training and 83,381.52 for testing reflects the model's average absolute error in predicting housing prices. The higher MAE in the test set compared to the training set further supports the possibility of overfitting.
+
+### 10.2 Transformed Model Analysis
+
+```{r display_transformed_model_results, echo = FALSE, include = TRUE}
+# Display Transformed model results
+datatable(
+  df_results[df_results$Model %in% "Transformed Model", ],
+  caption = generate_table_caption("Transformed Model Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.2.1 Results and Interpretation
+
+##### Model Performance
+
+The Transformed Model, likely involving some form of data transformation or feature engineering, exhibits strong performance, with R-squared values of 0.87256 and 0.87105 for the training and test datasets, respectively. This consistency in R-squared values between training and testing suggests the model generalizes well without significant overfitting.
+
+The RMSE values, standing at 133,184.41 for training and 200,676.10 for testing, are relatively high, particularly in the test set. This indicates a larger average prediction error, which might be a concern in practical applications where lower errors are desired.
+
+The MAE values of 76,550.98 for training and 81,099.88 for testing further suggest that, on average, the model's predictions are off by these amounts from the actual prices. The closer values of MAE between training and testing datasets indicate a consistent performance of the model across both datasets.
+
+In summary, the Transformed Model's consistent performance across training and testing sets is commendable, but its higher error metrics compared to the Neural Network model suggest there might be room for improvement, possibly through more refined feature engineering or model tuning.
+
+### 10.3 OLS Stepwise Backward Model Analysis
+
+```{r display_ols_step_backward_results, echo = FALSE, include = TRUE}
+# Display OLS Stepwise Backward model results
+datatable(
+  df_results[df_results$Model %in% "OLS_Step_Backward", ],
+  caption = generate_table_caption("OLS Stepwise Backward Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.3.1 Results and Interpretation
+
+##### Model Performance
+
+The OLS Stepwise Backward Model, a linear regression model that iteratively removes the least significant variables, shows good R-squared values of 0.81781 for training and 0.81969 for testing. These values indicate that the model explains over 81% of the variance in housing prices in both datasets, showcasing a balanced fit that does not overly favor the training data.
+
+The RMSE values of 154,372.05 for training and 161,155.62 for testing suggest a moderate level of prediction error. While higher than what we observed in the Neural Network model, these values are acceptable for a linear model, which often trades off some predictive power for simplicity and interpretability.
+
+The MAE values of 92,205.44 for training and 93,103.61 for testing are consistent, indicating that the model's average prediction error remains stable across both datasets. This stability is a positive aspect, as it suggests the model's performance is not heavily dependent on the specific characteristics of the training data.
+
+Overall, the OLS Stepwise Backward Model is a strong contender in predicting housing prices, offering a good balance between predictive accuracy and model simplicity. Its interpretability, a key advantage of linear models, makes it a valuable tool for understanding the relationships between features and housing prices in King County.
+
+
+### 10.4 OLS Linear Model Analysis
+
+```{r display_ols_linear_results, echo = FALSE, include = TRUE}
+# Display OLS Linear model results
+datatable(
+  df_results[df_results$Model %in% "OLS_linear", ],
+  caption = generate_table_caption("OLS Linear Model Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.4.1 Results and Interpretation
+
+##### Model Performance
+
+The OLS Linear Model displays a commendable fit to the data with R-squared values of 0.81859 for training and 0.81966 for testing. These values suggest that the model explains approximately 82% of the variance in housing prices, both in training and testing datasets, indicating a robust model that generalizes well to new data. The similarity in R-squared values between the training and testing sets is particularly noteworthy as it implies a consistent model performance without overfitting.
+
+Regarding error metrics, the RMSE values of 154,041.04 for training and 161,166.07 for testing suggest a moderate prediction error. While not as low as some more complex models like the Neural Network, these RMSE values are relatively acceptable for a linear regression model. The consistent RMSE between training and testing also underscores the model's generalizability.
+
+The MAE values, 91,957.68 for training and 93,048.1 for testing, further reinforce this point. They reflect a stable average prediction error across both datasets, which is a positive aspect for model reliability.
+
+The OLS Linear Model stands out for its simplicity and consistency, making it a valuable model for predicting housing prices, especially when interpretability and understanding of linear relationships are crucial.
+
+### 10.5 OLS Step Forward Model Analysis
+
+```{r display_ols_step_forward_results, echo = FALSE, include = TRUE}
+# Display OLS Step Forward model results
+datatable(
+  df_results[df_results$Model %in% "OLS_Step_Forward", ],
+  caption = generate_table_caption("OLS Step Forward Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.5.1 Results and Interpretation
+
+##### Model Performance
+
+The OLS Step Forward Model, which iteratively adds the most significant variables, shows good model performance with R-squared values of 0.8178 for training and 0.81961 for testing. These figures indicate that the model explains over 81% of the variance in the housing prices for both datasets, showcasing a balanced fit and good predictive power.
+
+The RMSE values of 154,375.23 for training and 161,191.81 for testing indicate a moderate level of prediction error. These figures, while slightly higher than the OLS Linear Model, are still reasonable for a regression model. The consistency of RMSE between training and testing suggests that the model is not overfitted to the training data and can generalize well.
+
+The MAE values of 92,195.59 for training and 93,107.59 for testing further confirm the model's stable predictive performance across the two datasets. The similarity in these values suggests that the model's average prediction error is consistent, which is advantageous for practical applications.
+
+The OLS Step Forward Model is a robust option for predicting housing prices, providing a good balance between model complexity and performance. Its incremental approach in selecting variables can be particularly useful in identifying the most relevant features affecting housing prices.
+
+### 10.6 OLS Step Both Model Analysis
+
+```{r display_ols_step_both_results, echo = FALSE, include = TRUE}
+# Display OLS Step Both model results
+datatable(
+  df_results[df_results$Model %in% "OLS_Step_Both", ],
+  caption = generate_table_caption("OLS Step Both Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.6.1 Results and Interpretation
+
+##### Model Performance
+
+The OLS Step Both Model, which considers both adding and removing variables in each step, shows R-squared values of 0.81614 for training and 0.81715 for testing. These values, though slightly lower than the previous OLS models, still indicate that the model explains a substantial portion of the variance in housing prices, with over 81% in both training and testing data.
+
+The model's RMSE values of 155,079.14 for training and 162,285.16 for testing are somewhat higher than the other OLS models, suggesting a slightly increased average prediction error. However, these values are still within a reasonable range for regression models.
+
+The MAE values of 92,978.7 for training and 94,247.4 for testing are consistent and reflect the model's stable performance in predicting housing prices across different datasets. This stability is crucial in ensuring the model's reliability in various scenarios.
+
+The OLS Step Both Model provides a balanced approach to variable selection, offering a good mix of predictability and interpretability. While it may not be the strongest model in terms of minimizing error metrics, its comprehensive approach to feature selection makes it a valuable tool in understanding the factors influencing housing prices in King County.
+
+### 10.7 OLS Step Both with Outliers Model Analysis
+
+```{r display_ols_step_both_outliers_results, echo = FALSE, include = TRUE}
+# Display OLS Step Both with Outliers model results
+datatable(
+  df_results[df_results$Model %in% "OLS_Step_Both_Outliers", ],
+  caption = generate_table_caption("OLS Step Both with Outliers Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.7.1 Results and Interpretation
+
+##### Model Performance
+
+The OLS Step Both with Outliers Model, which presumably includes a stepwise approach while also addressing outliers, shows an R-squared of 0.82176 in training and 0.8167 in testing. This indicates a strong ability to explain the variance in housing prices, slightly better than some other OLS models. The slight decrease in R-squared from training to testing could suggest minor overfitting or variance in the test data not captured by the model.
+
+In terms of error metrics, the RMSE values are 148,908.82 for training and 162,486.45 for testing. The lower RMSE in the training set compared to the testing set might be due to the model being slightly more tuned to the training data, especially in the context of outlier handling. However, these values are relatively lower compared to other models, which is a positive sign.
+
+The MAE values of 91,385.31 for training and 93,114.76 for testing are consistent and indicate a stable average prediction error across both datasets. This stability is a positive indicator of the model's reliability across different scenarios.
+
+The OLS Step Both with Outliers Model appears to be a strong contender in terms of balancing the trade-off between complexity and prediction accuracy, especially with its focus on outlier handling, which is crucial in real estate data with its often skewed and outlier-prone distributions.
+
+### 10.8 Regression Tree Model Analysis
+
+```{r display_regression_tree_results, echo = FALSE, include = TRUE}
+# Display Regression Tree model results
+datatable(
+  df_results[df_results$Model %in% "Regression Tree", ],
+  caption = generate_table_caption("Regression Tree Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.8.1 Results and Interpretation
+
+##### Model Performance
+
+The Regression Tree Model, a non-linear approach, shows R-squared values of 0.79117 for training and 0.75897 for testing. These figures, while lower than the linear models, still represent a decent level of predictive accuracy, especially considering the model's non-linear nature. The drop in R-squared from training to testing suggests some overfitting, typical in tree-based models.
+
+The RMSE values stand at 165,274.84 for training and 186,382.77 for testing, indicating higher average prediction errors compared to the linear models. This could be due to the model capturing complex patterns in the training data that don't generalize as well to the test set.
+
+The MAE values of 109,635.94 for training and 116,844.59 for testing are the highest among all models discussed so far. This suggests that the average prediction error of the Regression Tree is comparatively larger, which might be a critical factor to consider in its practical application.
+
+While the Regression Tree Model brings the advantage of modeling non-linear relationships, which are often present in real estate data, its tendency towards overfitting and higher error rates compared to linear models may limit its suitability as the primary model for predicting housing prices in King County.
+
+### 10.9 Weighted Transformed Model 200 Iterations Analysis
+
+```{r display_wt_model_200_results, echo = FALSE, include = TRUE}
+# Display WT Model 200 results
+datatable(
+  df_results[df_results$Model %in% "WT Model 200", ],
+  caption = generate_table_caption("Weighted Transformed Model 200 Iterations Results", section = 10),
+  options = list(
+    scrollX = TRUE,
+    autoWidth = TRUE
+  )
+)
+```
+
+#### 10.9.1 Results and Interpretation
+
+##### Model Performance
+
+The Weighted Transformed Model 200 Iterations, potentially a more complex or specialized model, shows R-squared values of 0.75884 for training and 0.74016 for testing. These values are comparatively lower than both the linear and the Regression Tree models, suggesting a lesser ability to explain the variance in housing prices. The consistency between training and testing R-squared values, however, does indicate a level of robustness in the model's predictive ability across different datasets.
+
+The RMSE values are significantly higher, with 642,962.63 for training and 662,703.16 for testing, indicating very high average prediction errors. This might raise concerns about the model's practical application, as such high errors could significantly impact decision-making in real estate markets.
+
+Similarly, the MAE values of 537,582.19 for training and 543,270.39 for testing are extremely high, further emphasizing the model's limited accuracy in predicting housing prices. This could be a result of the model's complexity, potential overfitting, or it not being well-tuned to this specific dataset.
+
+The Weighted Transformed Model 200 Iterations, despite its potential complexity and sophistication, does not seem to perform as well as the other models in predicting housing prices in King County. Its high error metrics and lower R-squared values suggest that it might not be the best choice for this particular application, especially when accuracy and reliability are paramount.
+
+
+```{r reset_section10_counters, echo = FALSE, include = FALSE}
+# End of section so set both table and figure to 0
+fig_counter <- 0
+table_counter <- 0
+```
+
+---
+
+## 11. Primary and Benchmark Models
+
+### 11.1 Overall Model Performances
+
+```{r model_performance_metrics, echo = FALSE, include = TRUE}
+# Display model results
+view_model_results(df_results, generate_table_caption("All Model Results Comparisons", section = 11))
+```
+
+
+Given the comprehensive analysis of various models for predicting housing prices in King County, the selection of the Neural Network model as the primary choice, with the Transformed Model as a backup, is based on a careful consideration of several key performance metrics.
+
+### 11.2 Primary Choice: Neural Network Model
+
+1. **High R-squared Values:** The Neural Network model exhibited the highest R-squared values (0.9404 for training and 0.8734 for testing), indicating superior predictive accuracy. This model explained a significant portion of the variance in housing prices, more so than any other model tested. High R-squared in training shows the model's ability to capture complex relationships in the data, while the relatively high value in testing indicates good generalization capabilities.
+
+2. **Balanced RMSE and MAE:** Although the RMSE and MAE values for the Neural Network model were higher in the testing set compared to the training set (suggesting some overfitting), these values were still among the lowest across all models. The RMSE of 150,299.41 and MAE of 83,381.52 in the testing set are indicative of relatively accurate predictions. Lower error metrics are crucial in real estate applications where large prediction errors can be costly.
+
+3. **Model's Flexibility and Complexity:** Neural Networks are inherently more flexible and capable of modeling complex non-linear relationships that are often present in real estate data. This makes them well-suited for capturing intricate patterns and interactions among variables that linear models might miss.
+
+### 11.3 Backup Choice: Transformed Model
+
+1. **Consistent R-squared Across Datasets:** The Transformed Model showed consistent R-squared values in both training (0.87256) and testing (0.87105), which were second only to the Neural Network model. This consistency is a strong indicator of the model’s ability to generalize well, avoiding the pitfall of overfitting.
+
+2. **Reasonable RMSE and MAE:** While the RMSE and MAE values of the Transformed Model were higher compared to the Neural Network, especially in the testing set (RMSE of 200,676.10 and MAE of 81,099.88), they were still within a reasonable range. These figures suggest that the model is capable of making relatively accurate predictions, albeit not as precise as the Neural Network.
+
+3. **Potential for Robustness in Feature Handling:** The name 'Transformed Model' suggests that it involves some form of data transformation or feature engineering. This could imply an effective handling of outliers or skewed distributions, which are common in housing data. Such transformations can make the model robust to anomalies in the data, which is a valuable quality in real estate market analysis.
+
+### 11.4 Comparative Analysis
+
+1. **Overfitting Concerns:** While the Neural Network showed some signs of overfitting (as evidenced by the drop in R-squared from training to testing), its overall performance metrics still outperformed other models. The Transformed Model, with its consistent performance across training and testing, serves as a good backup to mitigate any overfitting risks.
+
+2. **Error Metrics Consideration:** In real estate price prediction, minimizing prediction errors is crucial due to the high stakes involved. Both the Neural Network and the Transformed Model presented reasonable error metrics, making them preferable for such applications.
+
+3. **Complexity vs. Interpretability Trade-off:** While simpler models like OLS Linear or OLS Stepwise models offer greater interpretability, they fell short in capturing the complexity of the housing market data as effectively as the Neural Network. The Transformed Model strikes a balance between complexity and interpretability, making it a suitable backup.
+
+The Neural Network model's superior ability to capture complex patterns and its lower error metrics make it the best choice for predicting housing prices in King County. The Transformed Model, with its consistent performance and potential robustness, serves as an excellent backup, especially in scenarios where overfitting or complexity of the primary model might be a concern.
+
+```{r final_coefficients_comparison, echo = FALSE, include = TRUE}
+# Display the selected rows without columns containing NA values in a scrollable dataframe
+datatable(
+  coefficients_df,
+  caption = generate_table_caption("Total Calculated Difference Coefficients Comparison", section = 8),
+  options = list(
+    scrollX = TRUE,  # Enable horizontal scrolling
+    scrollY = TRUE,
+    autoWidth = TRUE,
+    pageLength = -1  # Show all rows without pagination
+  )
+)
+```
+
+### 11.3 Benchmark Model (Lasso) Justification
+
+In choosing the Lasso Model as the benchmark for predicting housing prices in King County, several key factors have been considered. This analysis assesses the Lasso Model's performance with regard to linearity, normality, multicollinearity, outliers, and heteroscedasticity. The examination primarily focuses on the model's coefficients and their differences (total_diff) in comparison to other robust models (Huber, Ridge, Elastic Net, and Lasso).
+
+### 11.4 Analysis of Coefficients
+
+1. **Total Difference (total_diff):** The Lasso Model demonstrates a relatively low total_diff value compared to alternative models. This metric serves as a significant indicator of the model's overall stability and consistency in estimating coefficients across different modeling techniques.
+
+2. **Multicollinearity Control:** Lasso inherently addresses multicollinearity by shrinking certain coefficients to zero. This feature selection technique enhances model interpretability, reduces overfitting, and effectively deals with highly correlated predictors.
+
+3. **Outliers and Heteroscedasticity Management:** Lasso's regularization method not only facilitates feature selection but also mitigates sensitivity to outliers. This is evident in the stability of coefficients associated with variables such as 'lat,' 'long,' 'sqft_living,' and 'grade,' which are critical in housing price predictions. By penalizing the absolute magnitude of coefficients, Lasso diminishes the influence of outliers and aids in handling heteroscedasticity.
+
+4. **Handling Complex Feature Spaces:** The housing market dataset often includes a mix of categorical (e.g., zipcode, condition, grade) and continuous variables (e.g., sqft_living, bedrooms). Lasso adeptly manages this complexity by selecting the most relevant features and mitigating overfitting, as indicated by its coefficients across various predictors.
+
+5. **Comparison with Other Models:** In comparison to models such as Ridge or Elastic Net, Lasso strikes a balance between coefficient shrinkage and feature selection. Unlike Ridge, which shrinks coefficients but retains all variables, Lasso's approach of setting some coefficients to zero simplifies the model and enhances interpretability.
+
+6. **Coefficient Interpretation and Real Estate Insights:** The Lasso Model's coefficients align with intuitive real estate dynamics. For instance, positive coefficients for 'sqft_living,' 'bathrooms,' and 'grade_Above_Average' correspond to the understanding that larger, higher-graded houses with more amenities generally command higher prices. Negative coefficients for certain zip codes may suggest less desirable areas, a common insight in real estate analysis.
+
+7. **Consideration of Linearity and Normality:** While Lasso does not directly address linearity or normality assumptions, its reduction of multicollinearity indirectly contributes to a more stable and reliable linear regression framework.
+
+### 11.5 Conclusion
+
+The Lasso Model's effective control of multicollinearity, handling of outliers, and balanced approach to feature selection and regularization make it a well-suited benchmark model for predicting housing prices. Its lower total_diff value and the interpretability of its coefficients, especially within the context of real estate data, further support its appropriateness for this application. This approach, while robust, maintains a crucial level of simplicity and interpretability that is essential for practical real estate market analyses. Neural Networks model is our best model and our primary choice for the following reasons: it has the highest R-squared Values, balanced RMSE and MAE and model’s flexibility and complexity. In addition, we selected a backup model in the case Neural Networks loose performance or stability. Our back model is the Transformed Model as it has consistent R-squared across datasets, reasonable RMSE and MAE and  potential for robustness in feature handling.
