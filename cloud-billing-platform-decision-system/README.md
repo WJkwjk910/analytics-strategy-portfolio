@@ -93,6 +93,33 @@ This project demonstrates the ability to:
 
 ---
 
+## Key Product Decisions
+
+### 1. Centralized vs Decentralized Billing
+Chose a centralized architecture to improve revenue visibility and reduce operational duplication, despite higher initial implementation cost.
+
+### 2. Redundancy vs Cost Tradeoff
+Modeled increasing redundancy levels to reflect real-world infrastructure decisions:
+- Higher redundancy improves uptime
+- But introduces non-linear cost increases
+
+This highlights the need to balance reliability with budget constraints.
+
+### 3. Multi-Region Architecture
+Included a multi-region toggle to simulate:
+- Higher availability and fault tolerance
+- Increased infrastructure and operational cost
+
+### 4. ROI Timeline Assumption
+Assumed negative or neutral ROI in early years due to:
+- High upfront CapEx
+- Gradual realization of operational efficiencies
+
+This reflects realistic enterprise system investment patterns.
+
+---
+
 ## How to Run
 
 Open `index.html` in a browser.
+
