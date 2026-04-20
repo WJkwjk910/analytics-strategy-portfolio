@@ -1,50 +1,58 @@
-# Won Jun Kang — Analytics & Strategy Portfolio
+# Won Jun Kang — Systems Engineering & Analytics Portfolio
 
-Master’s candidate in Systems Engineering with a background in economics, analytics, and business problem-solving. This portfolio highlights selected projects in predictive modeling, forecasting, and decision support.
-
-## Selected Projects
-
-### [Iowa Liquor Sales Analysis — Revenue Optimization](./iowa-liquor-sales-analysis)
-Analyzed 12M+ transaction records to identify pricing, inventory, and geographic opportunities for revenue optimization in a statewide liquor distribution system.
-
-**Highlights**
-- Processed and analyzed large-scale retail transaction data (2019–2023)
-- Identified seasonal demand spikes to improve inventory planning
-- Determined optimal pricing range ($10–$25) driving highest sales volume
-- Highlighted top-performing cities and stores to guide targeted strategy
+Systems Engineering graduate student focused on system design, integration, and data-driven decision making. Experience building analytical models and simulation tools to support business and operational strategy.
 
 ---
 
-### [National City Bank — Customer Propensity Modeling](./national-city-bank-propensity-model)
-Developed predictive models to identify customers most likely to adopt a new auto credit line, enabling targeted marketing and improved customer acquisition efficiency.
+## Featured Projects
 
-**Highlights**
-- Built logistic regression and random forest models
-- Achieved internal validation AUC ~0.90 and external AUC 0.82
-- Ranked 1,000 customers and identified top 100 high-probability prospects
+### Cloud Billing Platform — System Design & Integration
+Designed a cloud-based billing platform using a systems engineering approach, modeling architecture, workflows, and trade-offs between cost, scalability, and reliability.
 
----
+- Built an interactive simulation app (Streamlit)
+- Modeled financial projections, ROI, and system performance
+- Evaluated integration and operational trade-offs
 
-### [Kaiserliche Bohne — Sales Forecasting & Demand Analysis](./kaiserliche-bohne-sales-forecasting)
-Built demand forecasting models using transaction data to support inventory planning, staffing decisions, and operational efficiency in a retail coffee business.
-
-**Highlights**
-- Performed time-series analysis to identify trends and seasonality
-- Developed forecasting models for key products (e.g., cappuccino)
-- Generated demand projections to support operational decision-making
+[View Project](https://github.com/WJkwjk910)
 
 ---
 
-### [Home Value Forecasting — Real Estate Price Analysis](./home-value-forecasting)
-Analyzed housing market data to identify regions with strong and consistent price growth, supporting data-driven real estate investment decisions.
+### National City Bank — Customer Propensity Modeling
+Developed predictive models to identify high-value customers and support targeted marketing strategy.
 
-**Highlights**
-- Evaluated long-term price trends across regions
-- Compared growth consistency and volatility
-- Identified top markets for stable and high-return investment potential
-  
-## Technical Skills
-Python, R, SQL, Excel, Predictive Modeling, Forecasting, Decision Analysis
+- Achieved AUC ~0.88–0.90 (internal), ~0.82 (external)
+- Ranked top 100 prospects from 1,000 customers
+- Translated model outputs into business insights
 
-## Focus Areas
-Customer Analytics | Forecasting | Business Strategy | Decision Support | Operational Insights
+[View Project](https://github.com/WJkwjk910)
+
+---
+
+### Kaiserliche Bohne — Sales Forecasting & Demand Analysis
+Analyzed multi-year transaction data to forecast demand and improve operational planning.
+
+- Built time-series forecasting models (ETS / Holt-Winters)
+- Identified demand patterns and variability
+- Supported inventory and staffing decisions
+
+[View Project](https://github.com/WJkwjk910)
+
+---
+
+## Skills
+
+**Tools:** Python, R, SQL, Excel  
+**Methods:** Forecasting, Predictive Modeling, Scenario Analysis  
+**Systems:** Requirements Definition, System Design, Workflow Structuring, Cross-Functional Coordination  
+
+---
+
+## About Me
+
+Master’s student in Systems Engineering at Harvard Extension School (Expected May 2027). Background in economics with a focus on applying analytical and systems thinking to real-world decision making.
+
+---
+
+## Contact
+
+Email: wonjunkang732@gmail.com  
