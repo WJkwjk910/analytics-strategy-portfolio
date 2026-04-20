@@ -1,125 +1,91 @@
-# Cloud Billing Platform Decision System
+# Cloud Billing Platform — System Design & Decision Framework
 
-A decision-support product designed to evaluate the business and technical tradeoffs of implementing a centralized cloud-based billing platform.
+## Overview
+This project simulates the design of a cloud-based billing platform using a systems engineering approach. The goal is to model how organizations evaluate, design, and optimize complex systems by balancing cost, performance, scalability, and operational constraints.
 
-This project models how infrastructure, financial investment, and operational decisions impact system performance, cost efficiency, and long-term ROI.
-
----
-
-## Problem
-
-Large financial institutions often operate fragmented billing systems across multiple products, leading to:
-
-* Poor client experience due to multiple invoices
-* Limited visibility into total client revenue
-* Operational inefficiencies from manual reconciliation
-* Difficulty scaling new products
+The platform is built as an interactive application to support decision-making across financial planning, system architecture, and operational strategy.
 
 ---
 
-## Solution
-
-This project simulates a centralized cloud-based billing platform and provides a decision framework to evaluate:
-
-* Financial investment (CapEx / OpEx)
-* Revenue impact and cost savings
-* System reliability vs cost tradeoffs
-* Operational efficiency improvements
+## Objectives
+- Design a scalable billing platform integrating multiple system components  
+- Model trade-offs between cost, reliability, and performance  
+- Support decision-making through simulation and scenario analysis  
+- Translate system-level design into business and operational outcomes  
 
 ---
 
-## Key Product Capabilities
+## System Approach
+This project follows a systems engineering framework:
 
-### 1. Financial Modeling Engine
+- Requirements Definition: Identifying financial, operational, and technical needs  
+- System Design: Structuring architecture, workflows, and component interactions  
+- Integration: Modeling dependencies across subsystems (billing, data, reporting)  
+- Validation: Evaluating system performance through simulations and trade-offs  
 
-* 5-year projection of cost, returns, and ROI
-* Dynamic inputs for CapEx, OpEx, and revenue drivers
-* Real-time recalculation and visualization
+---
 
-### 2. Tradeoff Simulation (Core Feature)
+## Key Features (Panels)
 
-Models infrastructure decisions and their impact:
+### Panel 1: Financial Projection Model
+- Projects 5-year OpEx, CapEx, and ROI  
+- Allows user-defined inputs and growth assumptions  
 
-* Redundancy level → affects uptime and cost
-* Single-region vs multi-region → reliability vs expense
+### Panel 2: ROI Breakdown
+- Quantifies tangible and intangible returns  
+- Visualizes ROI trends over time  
 
-### 3. CI/CD Efficiency Simulator
+### Panel 3: Governance & Compliance
+- Maps system governance structure  
+- Incorporates frameworks (SOC 2, HIPAA, ISO 27001)  
 
-Simulates how:
+### Panel 4: SLA & Decision Structures
+- Defines service levels, response priorities, and accountability  
+- Simulates operational decision-making  
 
-* Automation level
-* Team size
+### Panel 5: CI/CD Efficiency Simulator
+- Models deployment frequency and failure rates  
+- Demonstrates impact of automation and team size  
 
-affect:
+### Panel 6: Uptime vs Cost Trade-off
+- Simulates redundancy levels and multi-region deployment  
+- Evaluates reliability vs infrastructure cost  
 
-* Deployment frequency
-* Failure rate
-* System health
+### Panel 7: AI Investment vs ROI Sensitivity
+- Models ROI impact of AI investment and data quality  
+- Identifies optimal investment zones  
 
-### 4. Product & Governance Layer
+### Panel 8: Employee Adoption Model
+- Simulates adoption rates based on training and leadership engagement  
+- Tracks resistance vs adoption over time  
 
-Includes:
-
-* SLA definitions
-* Governance structures
-* Compliance frameworks (SOC 2, HIPAA, ISO 27001)
+### Panel 9: Product Diffusion Strategy
+- Models adoption curves and market rollout strategies  
+- Evaluates growth under different market conditions  
 
 ---
 
 ## Key Insights
-
-* Early-stage cloud investments may show negative ROI but improve over time
-* Infrastructure decisions significantly impact cost-performance balance
-* Centralized billing improves revenue visibility and scalability
-
----
-
-## Tech Stack
-
-* HTML
-* CSS
-* JavaScript
-* Chart.js
+- ROI is highly sensitive to both system design and data quality  
+- Reliability improvements introduce nonlinear cost increases  
+- Automation significantly improves deployment efficiency but has diminishing returns  
+- Organizational factors (training, leadership) strongly influence system adoption  
 
 ---
 
-## Why This Project
-
-This project demonstrates the ability to:
-
-* Translate business problems into system-level solutions
-* Model tradeoffs between engineering and financial decisions
-* Think in terms of product strategy, not just implementation
+## Technologies Used
+- Python  
+- Streamlit  
+- Data visualization libraries  
 
 ---
 
-## Key Product Decisions
-
-### 1. Centralized vs Decentralized Billing
-Chose a centralized architecture to improve revenue visibility and reduce operational duplication, despite higher initial implementation cost.
-
-### 2. Redundancy vs Cost Tradeoff
-Modeled increasing redundancy levels to reflect real-world infrastructure decisions:
-- Higher redundancy improves uptime
-- But introduces non-linear cost increases
-
-This highlights the need to balance reliability with budget constraints.
-
-### 3. Multi-Region Architecture
-Included a multi-region toggle to simulate:
-- Higher availability and fault tolerance
-- Increased infrastructure and operational cost
-
-### 4. ROI Timeline Assumption
-Assumed negative or neutral ROI in early years due to:
-- High upfront CapEx
-- Gradual realization of operational efficiencies
-
-This reflects realistic enterprise system investment patterns.
+## Repository Structure
+- `/app.py` — Main application  
+- `/modules` — Simulation components  
+- `/data` — Input datasets (if applicable)  
+- `/assets` — Visuals and supporting files  
 
 ---
 
-## How to Run
-
-Open `index.html` in a browser.
 
