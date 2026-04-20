@@ -13,7 +13,6 @@ Designed a cloud-based billing platform using a systems engineering approach, mo
 - Modeled financial projections, ROI, and system performance
 - Evaluated integration and operational trade-offs
 
-[View Project](https://github.com/WJkwjk910)
 
 ---
 
@@ -24,7 +23,6 @@ Developed predictive models to identify high-value customers and support targete
 - Ranked top 100 prospects from 1,000 customers
 - Translated model outputs into business insights
 
-[View Project](https://github.com/WJkwjk910)
 
 ---
 
@@ -35,7 +33,6 @@ Analyzed multi-year transaction data to forecast demand and improve operational 
 - Identified demand patterns and variability
 - Supported inventory and staffing decisions
 
-[View Project](https://github.com/WJkwjk910)
 
 ---
 
