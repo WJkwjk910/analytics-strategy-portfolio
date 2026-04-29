@@ -13,18 +13,12 @@ Designed a cloud-based billing platform using a systems engineering approach, mo
 - Modeled financial projections, ROI, and system performance
 - Evaluated integration and operational trade-offs
 
-
----
-
 ### National City Bank — Customer Propensity Modeling
 Developed predictive models to identify high-value customers and support targeted marketing strategy.
 
 - Achieved AUC ~0.88–0.90 (internal), ~0.82 (external)
 - Ranked top 100 prospects from 1,000 customers
 - Translated model outputs into business insights
-
-
----
 
 ### Kaiserliche Bohne — Sales Forecasting & Demand Analysis
 Analyzed multi-year transaction data to forecast demand and improve operational planning.
@@ -33,6 +27,19 @@ Analyzed multi-year transaction data to forecast demand and improve operational 
 - Identified demand patterns and variability
 - Supported inventory and staffing decisions
 
+### Iowa Liquor Sales Analysis
+Analyzed statewide liquor sales data to identify revenue drivers, regional demand patterns, and product-level performance across stores and categories.
+
+- Cleaned and aggregated transaction-level sales data
+- Analyzed seasonal trends, geographic distribution, and category performance
+- Identified high-performing counties and top-selling product segments
+
+### Real Estate Price Forecasting
+Developed predictive models to estimate housing prices and analyze key drivers of property value for investment decision-making.
+
+- Performed data cleaning, feature selection, and exploratory analysis
+- Built regression-based models to forecast property prices
+- Identified location and property size as primary drivers of price variation
 
 ---
 
